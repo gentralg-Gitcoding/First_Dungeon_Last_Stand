@@ -1,6 +1,9 @@
 # First_Dungeon_Last_Stand
 My first personal creative AI Gaming project.
 
+Credits to PyGame for open use of base code.
+https://www.pygame.org/
+
 
 How we want to setup this project:
 game/
