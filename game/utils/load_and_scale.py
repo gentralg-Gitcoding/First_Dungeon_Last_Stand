@@ -17,6 +17,3 @@ def load_and_scale(path, width=TILE_SIZE, height=TILE_SIZE, namehint=''):
     '''
     img = pygame.image.load(path, namehint).convert_alpha()
     return pygame.transform.scale(img, (width, height))
-
-def resize_surface(surface, width=TILE_SIZE, height=TILE_SIZE):
-    return pygame.transform.scale(surface, (width, height))
