@@ -5,8 +5,12 @@ SCREEN_HEIGHT = 720
 TILE_SIZE = 32
 
 #Size of the map layout array
-MAP_WIDTH = 25
-MAP_HEIGHT = 18
+MAP_WIDTH = 30
+MAP_HEIGHT = 20
 
 #limits frame rates
 FPS = 60
+
+#Room size
+ROOM_WIDTH = SCREEN_WIDTH // TILE_SIZE
+ROOM_HEIGHT = SCREEN_HEIGHT // TILE_SIZE
