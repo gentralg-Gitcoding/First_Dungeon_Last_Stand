@@ -6,23 +6,24 @@ from settings import *
 
 class Generator(nn.Module):
     # def __init__(self, noise_dim=100, room_size=16):
-    def __init__(self, noise_dim=100):
+    def __init__(self, noise_dim=100, num_room_types=5):
         super().__init__()
 
         self.room_width = ROOM_WIDTH
         self.room_height = ROOM_HEIGHT
+        self.embedding = nn.Embedding(num_room_types, 10)
 
         self.fc = nn.Sequential(
-            nn.Linear(noise_dim, 256),
+            nn.Linear(noise_dim + 10, 256),
             nn.ReLU(),
             nn.Linear(256, self.room_width * self.room_height),
             nn.Tanh()       #GANs prefer centered distributions, so we use Tanh to center around 0
         )
 
-        # self.room_size = room_size
-
-    def forward(self, z):
-        x = self.fc(z)
+    def forward(self, z, room_type):
+        emb = self.embedding(room_type)  # shape: (batch, 10)
+        x = torch.cat([z, emb], dim=1)
+        x = self.fc(x)
         x = x.view(-1, 1, self.room_height, self.room_width)
         return x
 
@@ -70,7 +71,8 @@ def train_gan(generator, discriminator, dataloader, epochs=50):
             # Train Discriminator
             # -----------------
             z = torch.randn(batch_size, 100).to(device)
-            fake_rooms = generator(z)
+            room_types = torch.randint(0, 3, (batch_size,))
+            fake_rooms = generator(z, room_types)
 
             d_loss_real = criterion(discriminator(real_rooms), real_labels)
             d_loss_fake = criterion(discriminator(fake_rooms.detach()), fake_labels)
@@ -95,15 +97,23 @@ def train_gan(generator, discriminator, dataloader, epochs=50):
 
         print(f"Epoch {epoch}: D={d_loss.item():.4f}, G={g_loss.item():.4f}")
 
-def generate_room(generator, width, height):
+
+def generate_room(generator, room_type_str, width, height):
     generator.eval()
+
+    #Dont modify start and boss rooms
+    if room_type_str in ["start", "boss"]:
+        return None
+
+    #Turn roomtype into tensor
+    room_type = torch.tensor([ROOM_TYPES[room_type_str]])
 
     with torch.no_grad():
         z = torch.randn(1, 100)
-        room = generator(z).squeeze().cpu().numpy()
+        room_map = generator(z, room_type).squeeze().cpu().numpy()
 
     # Convert from tanh's [-1,1] → tile integers
-    room = ((room + 1) / 2) * 5
-    room = room.astype(int)
+    room_map = ((room_map + 1) / 2) * 3
+    room_map = room_map.astype(int)
 
-    return room[:height, :width]
+    return room_map

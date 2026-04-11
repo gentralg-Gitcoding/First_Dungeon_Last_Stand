@@ -1,11 +1,12 @@
 import sys
 import pygame
 import random
+import json
 
 #User files
 from settings import *
-from utils.load_and_scale import *
-from engine.map_generator import generate_dungeon_room, ROOMS
+from utils.load_and_scale import load_and_scale, load_img
+from engine.map_generator import generate_dungeon_room
 
 
 
@@ -20,6 +21,18 @@ pygame.display.set_caption("First Dungeon Last Stand")
 floor_img = load_and_scale("game/assets/tiles/Brick_01.png", namehint="floor")
 wall_img = load_and_scale("game/assets/tiles/Brickwall5_Texture.png", namehint="wall")
 
+#Load enemy assets
+bat_grey_img = load_and_scale('game/assets/DO Monsters/Monsters/BatGrey.PNG', namehint='bat_grey')
+bat_grey_img.set_colorkey((255, 0, 255, 255))
+
+#Load loot assets
+chest_1_img = load_and_scale('game/assets/DO Terrain/Terrain/L2_Chest01.PNG', namehint='chest_1')
+chest_1_img.set_colorkey((255, 0, 255, 255))
+
+#Load healing assets
+fountain_img = load_and_scale('game/assets/DO Terrain/Terrain/L2_Fountain01.PNG', namehint='fountain')
+fountain_img.set_colorkey((255, 0, 255, 255))
+
 
 #Optional Transparency
 # floor_img.set_colorkey((0, 0, 0))
@@ -29,42 +42,125 @@ player_img = load_img("game/assets/players/Males/M_06.png", "player")
 
 #Load door sprite asset 
 door_img = load_img('game/assets/doors.png', 'doors')
-# print(door_img.get_at([0,0]))
 door_img.set_colorkey((255, 255, 255, 0))
 
 clock = pygame.time.Clock()
 running = True
 dt = 0
 
+#Create world's starting zone 
+world_map = {}
+room_pos = (0, 0)
+direction = ''
+
+#Create first room on app start
+room = generate_dungeon_room()
+
+#Put first room into world map
+world_map[room_pos] = {
+    "room": room,
+    "type": room.type,
+    "cleared": True     #First room is cleared
+}
+
+#Place the player in the center of the first room
+player_x, player_y = room.center()
+
+#Get the direction of the door the player moves in
+def get_direction(px, py):
+    if(px == ROOM_WIDTH - 1 and py == ROOM_HEIGHT // 2):
+        #Player exits right
+        return 'right' 
+
+    elif(px == ROOM_WIDTH // 2 and py == 0):
+        #Player exits top
+        return  'top'
+
+    elif(px == 0 and py == ROOM_HEIGHT // 2):
+        #Player exits left
+        return 'left'
+
+    elif(px == ROOM_WIDTH // 2 and py == ROOM_HEIGHT - 1):
+        #Player exits bottom
+        return 'bottom'
 
 
+#Reposition player depending on door direction you move to
+def set_player_position(direction):
+    if(direction == 'right'):
+        #Player exits right
+        return 1, ROOM_HEIGHT // 2
 
-# dungeon_map, rooms = generate_dungeon(ROOM_WIDTH, ROOM_HEIGHT)
-dungeon_room, room = generate_dungeon_room(ROOM_WIDTH, ROOM_HEIGHT)
+    elif(direction == 'top'):
+        #Player exits top
+        return ROOM_WIDTH // 2, ROOM_HEIGHT - 2
 
+    elif(direction == 'left'):
+        #Player exits left
+        return ROOM_WIDTH - 2, ROOM_HEIGHT // 2
 
+    elif(direction == 'bottom'):
+        #Player exits bottom
+        return ROOM_WIDTH // 2, 1
 
-#Place the player in the center of first room
-player_x, player_y = ROOMS[0].center()
+#Updates the room in the world map the player moved to
+def move_rooms(room_pos, direction):
+    x, y = room_pos
+    # print(f'Moved to room: {room_pos}')
 
-#Player exits right
-spawn_x = 1
-spawn_y = ROOM_HEIGHT // 2
+    if direction == 'right':
+        return (x + 1, y)
+    if direction == 'top':
+        return (x, y - 1)
+    if direction == 'left':
+        return (x - 1, y)
+    if direction == 'bottom':
+        return (x, y + 1)
 
-#Player exits top
-spawn_x = ROOM_WIDTH // 2
-spawn_y = ROOM_HEIGHT - 2
 
 # TODO: Create a trackable vector for seamless movements when a key is held down 
 # player_pos = pygame.Vector2(player_x * TILE_SIZE, player_y * TILE_SIZE)
 
-def check_door_transition(player_x, player_y, room_matrix=dungeon_room):
+def check_door_transition(player_x, player_y, room_map=room.room_map):
     px, py = player_x, player_y
 
-    if room_matrix[py][px] == 2:
+    if room_map[py][px] == '+':
         return True
 
+    # print(f'Didnt catch transition: {room_map[py][px]}')
     return False
+
+def handle_room_transition():
+    global room_pos, direction, room, player_x, player_y
+
+    #Check which way the player went
+    direction = get_direction(player_x, player_y)
+
+    if not direction:
+        return player_x, player_y
+
+    new_pos = move_rooms(room_pos, direction)
+
+    if new_pos in world_map:
+        # Room already exists
+        # print(f'Room: {new_pos}')
+        # print(world_map[new_pos]['room'].type)
+        room = world_map[new_pos]['room']
+    else:
+        # Generate new room
+        new_room = generate_dungeon_room()
+        # print(f'Entered new room: {new_pos}')
+        world_map[new_pos] = {
+            'room': new_room,
+            'type': new_room.type,
+            'cleared': False
+        }
+        room = new_room
+
+    room_pos = new_pos
+
+    # reposition player depending on door used
+    player_x, player_y = set_player_position(direction)
 
 while running:
 
@@ -89,20 +185,20 @@ while running:
 
             #Setup wall blocking (ORDER MATTERS!)
             if (
-                0 <= new_x < len(dungeon_room[0]) and
-                0 <= new_y < len(dungeon_room) and
-                dungeon_room[new_y][new_x] != "#"
+                0 <= new_x < len(room.room_map[0]) and
+                0 <= new_y < len(room.room_map) and
+                room.room_map[new_y][new_x] != "#"
             ):
+                # print(player_x, player_y)
                 player_x = new_x
                 player_y = new_y
 
             #Check if player transitioned rooms
-            if check_door_transition(player_x, player_y, dungeon_room):
-                current_room = ROOMS.index(random.randrange(1,9))
+            if check_door_transition(player_x, player_y, room.room_map):
 
-                # reposition player depending on door used
-                player_x.set_position(spawn_x)
-                player_y.set_position(spawn_y)
+                handle_room_transition()
+
+
 
     # keys = pygame.key.get_pressed()
     # if keys[pygame.K_w]:
@@ -139,9 +235,10 @@ while running:
     door_surface = door_img.subsurface(door_frame).copy()
     door_surface = pygame.transform.scale(door_surface, (TILE_SIZE, TILE_SIZE))
 
-
-    #Draw Dungeon Tiles
-    for y, row in enumerate(dungeon_room):
+    # -------------
+    # Draw Dungeon Tiles
+    # -------------
+    for y, row in enumerate(room.room_map):
         for x, tile in enumerate(row):
             if tile == "#":
                 #Draws the png for the walls
@@ -151,30 +248,46 @@ while running:
                 screen.blit(floor_img, (x * TILE_SIZE, y * TILE_SIZE))
             elif tile == "+":
                 screen.blit(door_surface, (x * TILE_SIZE, y * TILE_SIZE))
+            elif tile == 'E':
+                screen.blits((
+                    (floor_img, (x * TILE_SIZE, y * TILE_SIZE)),
+                    (bat_grey_img, (x * TILE_SIZE, y * TILE_SIZE))
+                    )
+                )
+            elif tile == 'C':
+                screen.blits((
+                    (floor_img, (x * TILE_SIZE, y * TILE_SIZE)),
+                    (chest_1_img, (x * TILE_SIZE, y * TILE_SIZE))
+                    )
+                )
+            elif tile == 'H':
+                screen.blits((
+                    (floor_img, (x * TILE_SIZE, y * TILE_SIZE)),
+                    (fountain_img, (x * TILE_SIZE, y * TILE_SIZE))
+                    )
+                )
 
 
     #VISUAL DEBUG ONLY
-    for i, room in enumerate(ROOMS):
-        cx, cy = room.center()
+    cx, cy = room.center()
 
-        if room.type == "start":
-            color = (0, 255, 0)
-        elif room.type == "boss":
-            color = (255, 0, 0)
-        elif room.type == "loot":
-            color = (255, 255, 0)
-        elif room.type == "empty":
-            color = (255, 0, 255)
-        else:
-            color = (100, 100, 255)
+    if room.type == "start":
+        color = (0, 255, 0)
+    elif room.type == "boss":
+        color = (255, 0, 0)
+    elif room.type == "loot":
+        color = (255, 255, 0)
+    elif room.type == "healing":
+        color = (255, 0, 255)
+    else:
+        color = (100, 100, 255)
 
-        pygame.draw.circle(
-            screen,
-            color,
-            (cx * TILE_SIZE, cy * TILE_SIZE),
-            5
-        )
-        # print(f'Room: {i}')
+    pygame.draw.circle(
+        screen,
+        color,
+        (cx * TILE_SIZE, cy * TILE_SIZE),
+        5
+    )
 
     # Get Player frame from player sprite sheet
     # 64px by 51px with 4 by 3 frames
