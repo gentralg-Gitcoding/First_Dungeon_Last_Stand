@@ -16,8 +16,8 @@ ENEMY = ROOM_TILE_DICT['ENEMY']
 CHEST = ROOM_TILE_DICT['CHEST']
 HEALING = ROOM_TILE_DICT['HEALING']
 
-MIN_ENEMIES = 8
-MAX_ENEMIES = 24
+MIN_ENEMIES = 24
+MAX_ENEMIES = 48
 
 
 def ensure_connected(room, doors):
@@ -176,7 +176,7 @@ def room_fill(room_matrix, room_type):
     # Add obstacle clusters
     # -------------------------------------------------
     area = width * height           # default settings: 40 * 22 = 880
-    num_clusters = random.randint(area // 80, area // 40)   # Keep a ratio based on room size changes
+    num_clusters = random.randint(area // 120, area // 80)   # Keep a ratio based on room size changes
 
     for _ in range(num_clusters):
         cx = random.randint(1, width - 2)

@@ -183,16 +183,16 @@ def apply_entities(original, generated, mask, density=0.6):
                 entity = generated[y][x]
 
                 #Convert GANs dict values into room dict values
-                # if entity == WALL:     #Wall
-                #     original[y][x] = WALL
-                if entity == ENEMY:     #Enemy
+                if entity == WALL:     #Wall
+                    original[y][x] = WALL
+                elif entity == ENEMY:     #Enemy
                     original[y][x] = ENEMY  
                 elif entity == CHEST:     #Chest
                     original[y][x] = CHEST
                 elif entity == HEALING:     #Healing
                     original[y][x] = HEALING
-                else:
-                    original[y][x] = FLOOR
+                # else:
+                #     original[y][x] = FLOOR
 
     return original
 
@@ -248,28 +248,28 @@ def enforce_room_type_bias(matrix, room_type):
 
     return matrix
 
-def ensure_minimum_entities(matrix, room_type):
-    count = sum(cell in [ENEMY, CHEST, HEALING] for row in matrix for cell in row)
+# def ensure_minimum_entities(matrix, room_type):
+#     count = sum(cell in [ENEMY, CHEST, HEALING] for row in matrix for cell in row)
 
-    if count == 0:
-        # Force at least one spawn
-        h = len(matrix)
-        w = len(matrix[0])
+#     if count == 0:
+#         # Force at least one spawn
+#         h = len(matrix)
+#         w = len(matrix[0])
 
-        for _ in range(10):
-            y = random.randint(1, h-2)
-            x = random.randint(1, w-2)
+#         for _ in range(10):
+#             y = random.randint(1, h-2)
+#             x = random.randint(1, w-2)
 
-            if matrix[y][x] == FLOOR:
-                if room_type == "enemy":
-                    matrix[y][x] = ENEMY
-                elif room_type == "loot":
-                    matrix[y][x] = CHEST
-                elif room_type == "healing":
-                    matrix[y][x] = HEALING
-                break
+#             if matrix[y][x] == FLOOR:
+#                 if room_type == "enemy":
+#                     matrix[y][x] = ENEMY
+#                 elif room_type == "loot":
+#                     matrix[y][x] = CHEST
+#                 elif room_type == "healing":
+#                     matrix[y][x] = HEALING
+#                 break
 
-    return matrix
+#     return matrix
 
 
 def boost_entities(matrix):
@@ -322,7 +322,7 @@ def generate_dungeon_room(width = ROOM_WIDTH, height = ROOM_HEIGHT):
         # Apply cross entity transform turning GAN matrix values into room matrix values
         entity_matrix = apply_entities(room.room_map, gan_enforced_matrix, mask)
 
-        entity_matrix = ensure_minimum_entities(entity_matrix, room.type)
+        # entity_matrix = ensure_minimum_entities(entity_matrix, room.type)
 
         # Connectivity Check to make sure all doors have room for movement
         final_matrix = enforce_reachable_door(entity_matrix)

@@ -85,7 +85,7 @@ def train_gan(generator, discriminator, dataloader, epochs=50, device='cpu'):
     ce_criterion = torch.nn.CrossEntropyLoss(weight=class_weights)
 
     g_opt = torch.optim.Adam(generator.parameters(), lr=0.0002)
-    d_opt = torch.optim.Adam(discriminator.parameters(), lr=0.00005)  # Lower LR for discriminator to prevent overpowering generator
+    d_opt = torch.optim.Adam(discriminator.parameters(), lr=0.000001)  # Lower LR for discriminator to prevent overpowering generator
 
     for epoch in range(epochs):
         for real_rooms, room_types  in dataloader:
@@ -128,7 +128,7 @@ def train_gan(generator, discriminator, dataloader, epochs=50, device='cpu'):
             # -----------------
             # Train Generator
             # -----------------
-            for _ in range(2):
+            for _ in range(2):  # Train generator more times per discriminator step to help it catch up
                 z = torch.randn(batch_size, 100).to(device)
                 fake_rooms = generator(z, room_types)   # (B, 6, H, W)
 
@@ -140,15 +140,41 @@ def train_gan(generator, discriminator, dataloader, epochs=50, device='cpu'):
                 ce_loss = ce_criterion(fake_rooms, target)
 
                 g_loss = bce_criterion(discriminator(fake_rooms, room_types), real_labels)
-                g_loss = g_loss + 0.05 * ce_loss  # Combine adversarial loss with pixel-wise classification loss
+                g_loss += 0.2 * ce_loss  # Combine adversarial loss with pixel-wise classification loss
+
+                probs = torch.softmax(fake_rooms, dim=1)
 
                 # ----------------------
                 # Entropy regularization to encourage more diverse tile distributions in generated rooms
                 # ----------------------
-                probs = torch.softmax(fake_rooms, dim=1)
                 entropy = -(probs * torch.log(probs + 1e-8)).sum(dim=1).mean()
 
-                g_loss = g_loss - 0.01 * entropy
+                g_loss -= 0.05 * entropy
+
+                # ----------------------
+                # Entity mass regularization to encourage a reasonable amount of entities in generated rooms (not too empty, not too crowded)
+                # ----------------------
+                entity_mass = probs[:, 1:].mean()   # exclude floor
+
+                target = 0.5
+
+                entity_loss = torch.abs(entity_mass - target)
+
+                g_loss += 0.5 * entity_loss
+
+
+                # ----------------------
+                # Entity density regularization to encourage more entities in generated rooms, by a lot
+                # ----------------------
+                entity_probs = probs[:, 3:6]   # ONLY entities enemy, chest, healing
+
+                entity_density = entity_probs.mean()
+
+                target_density = 0.3   # start small
+
+                entity_loss = torch.abs(entity_density - target_density)
+
+                g_loss += 1.0 * entity_loss
 
                 # # ---------------------
                 # # Room type embedding regularization to encourage more meaningful room type representations
@@ -158,20 +184,19 @@ def train_gan(generator, discriminator, dataloader, epochs=50, device='cpu'):
 
                 # g_loss = g_loss + 0.01 * type_strength  # Encourage stronger room type embeddings
 
-                # # ---------------------
-                # # Entity density penalty to encourage more interesting rooms, but not too much
-                # # ---------------------
-                # entity_probs = torch.softmax(fake_rooms, dim=1)
+                # ---------------------
+                # Entity density penalty to encourage more interesting rooms, but not too much
+                # ---------------------
 
-                # enemy_density = entity_probs[:, 1].mean()
-                # chest_density = entity_probs[:, 2].mean()
-                # heal_density = entity_probs[:, 3].mean()
+                enemy_density = probs[:, 3].mean()
+                chest_density = probs[:, 4].mean()
+                heal_density = probs[:, 5].mean()
 
-                # target_density = 0.15  # Target density for entities in a room, can be tuned
-                # entity_density = enemy_density + chest_density + heal_density
-                # density_penalty = torch.abs(entity_density - target_density)
+                target_density = 0.3  # Target density for entities in a room, can be tuned
+                entity_density = enemy_density + chest_density + heal_density
+                density_penalty = torch.abs(entity_density - target_density)
 
-                # g_loss = g_loss + 0.1 * density_penalty    # Encourage more entities overall, but not too much
+                g_loss += 0.5 * density_penalty    # Encourage more entities overall, but not too much
 
                 # # ---------------------
                 # # Reward for empty space to prevent overcrowding
