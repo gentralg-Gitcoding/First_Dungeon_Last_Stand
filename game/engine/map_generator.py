@@ -6,6 +6,17 @@ from settings import GAN_TILE_DICT, ROOM_HEIGHT, ROOM_WIDTH, MAX_ROOMS, ROOM_TIL
 from utils.save_load_data import load_json_dataset
 import torch 
 
+
+
+
+
+# NOTE: This bool flag is for running the game with synthetic data for testing purposes, DO NOT KEEP THIS IN FINAL GAME, ONLY FOR TESTING
+TESTING_SYNTH = False
+
+#NOTE: DO NOT KEEP, TESTING ONLY
+if TESTING_SYNTH:
+    DATASET = load_json_dataset('game/data/synthetic_rooms_dataset.json')
+
 WALL = 0  
 FLOOR = 1   
 DOOR = 2  
@@ -21,13 +32,6 @@ GENERATOR = Generator(noise_dim=100, num_room_types=len(ROOM_TYPES))
 state_dict = torch.load("game/data/models/generator_epoch_49.pth", map_location=torch.device('cpu'))
 if state_dict:
     GENERATOR.load_state_dict(state_dict)
-
-TESTING_SYNTH = False
-DATA_SYNTH_PATH = 'game/data/synthetic_rooms_dataset.json'
-
-#NOTE: DO NOT KEEP, TESTING ONLY
-if TESTING_SYNTH:
-    DATASET = load_json_dataset(DATA_SYNTH_PATH)
 
 
 class Room:
@@ -109,6 +113,7 @@ def extract_room_matrix(room):
     Get Numerical representation of room tiles as a matrix, used mainly for GANs learning
     '''
     matrix = []
+    print(f"Extracting room matrix with values from ROOM_TILE_DICT: {ROOM_TILE_DICT}")
 
     for y in range(room.y, room.h):
         row = []
@@ -124,6 +129,8 @@ def apply_matrix_to_room_tiles(room, matrix):
     '''
     Convert numerical matrices into room tile characters from the MATRIX_TO_ROOM_TILE dict in settings
     '''
+    print(f"Applying matrix to room tiles using MATRIX_TO_ROOM_TILE: {MATRIX_TO_ROOM_TILE}")
+
     for y in range(room.h):
         for x in range(room.w):
             value = matrix[y][x]
@@ -230,6 +237,7 @@ def enforce_reachable_door(matrix):
     return matrix
 
 def enforce_room_type_bias(matrix, room_type):
+    removal_count = 0
 
     for y in range(len(matrix)):
         for x in range(len(matrix[0])):
@@ -237,15 +245,19 @@ def enforce_room_type_bias(matrix, room_type):
             if room_type == "enemy":
                 if matrix[y][x] in [CHEST, HEALING]:  # chest or healing fountain
                     matrix[y][x] = WALL
+                    removal_count += 1
 
             elif room_type == "loot":
                 if matrix[y][x] in [ENEMY, HEALING]:  # enemy or healing fountain
                     matrix[y][x] = WALL
+                    removal_count += 1
 
             elif room_type == "healing":
                 if matrix[y][x] in [ENEMY, CHEST]:   # enemy or chest 
                     matrix[y][x] = WALL
+                    removal_count += 1
 
+    print(f"Enforced {removal_count} tile removals for room type bias towards {room_type} room.")
     return matrix
 
 # def ensure_minimum_entities(matrix, room_type):

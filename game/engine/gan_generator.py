@@ -144,37 +144,37 @@ def train_gan(generator, discriminator, dataloader, epochs=50, device='cpu'):
 
                 probs = torch.softmax(fake_rooms, dim=1)
 
-                # ----------------------
-                # Entropy regularization to encourage more diverse tile distributions in generated rooms
-                # ----------------------
-                entropy = -(probs * torch.log(probs + 1e-8)).sum(dim=1).mean()
+                # # ----------------------
+                # # Entropy regularization to encourage more diverse tile distributions in generated rooms
+                # # ----------------------
+                # entropy = -(probs * torch.log(probs + 1e-8)).sum(dim=1).mean()
 
-                g_loss -= 0.05 * entropy
+                # g_loss -= 0.05 * entropy
 
                 # ----------------------
                 # Entity mass regularization to encourage a reasonable amount of entities in generated rooms (not too empty, not too crowded)
                 # ----------------------
-                entity_mass = probs[:, 1:].mean()   # exclude floor
+                entity_mass = probs[:, 2:].mean()   # exclude floor
 
-                target = 0.5
+                target = 0.3
 
                 entity_loss = torch.abs(entity_mass - target)
 
-                g_loss += 0.5 * entity_loss
+                g_loss += 0.3 * entity_loss
 
 
                 # ----------------------
                 # Entity density regularization to encourage more entities in generated rooms, by a lot
                 # ----------------------
-                entity_probs = probs[:, 3:6]   # ONLY entities enemy, chest, healing
+                enemy_mobs = probs[:, 3]   # ONLY entities enemy, chest, healing
 
-                entity_density = entity_probs.mean()
+                entity_density = enemy_mobs.mean()
 
-                target_density = 0.3   # start small
+                target_density = 0.4   # start small
 
                 entity_loss = torch.abs(entity_density - target_density)
 
-                g_loss += 1.0 * entity_loss
+                g_loss += 0.9 * entity_loss
 
                 # # ---------------------
                 # # Room type embedding regularization to encourage more meaningful room type representations
@@ -188,15 +188,15 @@ def train_gan(generator, discriminator, dataloader, epochs=50, device='cpu'):
                 # Entity density penalty to encourage more interesting rooms, but not too much
                 # ---------------------
 
-                enemy_density = probs[:, 3].mean()
-                chest_density = probs[:, 4].mean()
-                heal_density = probs[:, 5].mean()
+                # enemy_density = probs[:, 3].mean()
+                # chest_density = probs[:, 4].mean()
+                # heal_density = probs[:, 5].mean()
 
-                target_density = 0.3  # Target density for entities in a room, can be tuned
-                entity_density = enemy_density + chest_density + heal_density
-                density_penalty = torch.abs(entity_density - target_density)
+                # target_density = 0.5  # Target density for entities in a room, can be tuned
+                # entity_density = enemy_density + chest_density + heal_density
+                # density_penalty = torch.abs(entity_density - target_density)
 
-                g_loss += 0.5 * density_penalty    # Encourage more entities overall, but not too much
+                # g_loss += 0.7 * density_penalty    # Encourage more entities overall, but not too much
 
                 # # ---------------------
                 # # Reward for empty space to prevent overcrowding
@@ -205,21 +205,26 @@ def train_gan(generator, discriminator, dataloader, epochs=50, device='cpu'):
 
                 # g_loss = g_loss - 0.1 * empty_prob
 
-                # # ---------------------
-                # # Penalty for clustering of entities to encourage more natural room layouts
-                # # ---------------------
-                # enemy_map = entity_probs[:, 1]
+                # ---------------------
+                # Wall clustering promotes 
+                # ---------------------
+                wall_map = probs[:, 0] # Wall channel
 
+                # Look in 4 directions and penalize if neighboring tiles also have high wall probability (indicating clustering)
+                wall_cluster_loss = (
+                    torch.abs(wall_map - torch.roll(wall_map, 1, 1)).mean() +
+                    torch.abs(wall_map - torch.roll(wall_map, -1, 1)).mean() +
+                    torch.abs(wall_map - torch.roll(wall_map, 1, 2)).mean() +
+                    torch.abs(wall_map - torch.roll(wall_map, -1, 2)).mean()
+                )
 
-                # # Look in 4 directions and penalize if neighboring tiles also have high enemy probability (indicating clustering)
-                # cluster_loss = (
-                #     torch.abs(enemy_map - torch.roll(enemy_map, 1, 1)).mean() +
-                #     torch.abs(enemy_map - torch.roll(enemy_map, -1, 1)).mean() +
-                #     torch.abs(enemy_map - torch.roll(enemy_map, 1, 2)).mean() +
-                #     torch.abs(enemy_map - torch.roll(enemy_map, -1, 2)).mean()
-                # )
+                # ----------------------
+                # Wall density penalty to encourage a reasonable amount of walls in generated rooms
+                # ----------------------
+                wall_density = wall_map.mean()
+                wall_density_loss = torch.abs(wall_density - 0.3)  # Target wall density can be tuned
 
-                # g_loss = g_loss + 0.2 * cluster_loss
+                g_loss += 0.9 * wall_cluster_loss + 0.6 * wall_density_loss
 
                 # # ---------------------
                 # # Penalty for center bias spawning
@@ -276,9 +281,8 @@ def generate_room(generator, room_type_str, width, height):
         room_matrix = torch.argmax(room_matrix, dim=1)      # shape: (1, height, width) - tile type with highest probability at each position
 
         room_matrix = room_matrix.squeeze(0).cpu().numpy()  # shape: (height, width) - convert to numpy array
-    print(f"Generated room of type {room_type_str} with shape {room_matrix.shape}")
     unique, counts = np.unique(room_matrix, return_counts=True)
-    print(dict(zip(unique, counts)))
+    print(f"Generated Tile distribution: {dict(zip(unique, counts))}")
     return room_matrix
 
 
@@ -338,6 +342,7 @@ def get_imbalanced_class_weights(dataset):
         all_tiles.extend(flat)
 
     classes = np.unique(all_tiles)
+    print(f"Classes found in dataset: {classes}")
 
     weights = compute_class_weight(
         class_weight='balanced',
