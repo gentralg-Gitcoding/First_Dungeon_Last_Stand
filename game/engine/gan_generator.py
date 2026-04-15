@@ -84,6 +84,14 @@ def train_gan(generator, discriminator, dataloader, epochs=50, device='cpu'):
     print(f"Using class weights: {class_weights}")
     ce_criterion = torch.nn.CrossEntropyLoss(weight=class_weights)
 
+    density_targets = torch.tensor([
+        0.3,  # enemy room
+        0.01,  # loot room
+        0.00,  # healing room
+        0.00,  # start
+        0.00   # boss
+    ], device=device)
+
     g_opt = torch.optim.Adam(generator.parameters(), lr=0.0002)
     d_opt = torch.optim.Adam(discriminator.parameters(), lr=0.000001)  # Lower LR for discriminator to prevent overpowering generator
 
@@ -140,7 +148,7 @@ def train_gan(generator, discriminator, dataloader, epochs=50, device='cpu'):
                 ce_loss = ce_criterion(fake_rooms, target)
 
                 g_loss = bce_criterion(discriminator(fake_rooms, room_types), real_labels)
-                g_loss += 0.2 * ce_loss  # Combine adversarial loss with pixel-wise classification loss
+                g_loss += 0.3 * ce_loss  # Combine adversarial loss with pixel-wise classification loss
 
                 probs = torch.softmax(fake_rooms, dim=1)
 
@@ -154,27 +162,26 @@ def train_gan(generator, discriminator, dataloader, epochs=50, device='cpu'):
                 # ----------------------
                 # Entity mass regularization to encourage a reasonable amount of entities in generated rooms (not too empty, not too crowded)
                 # ----------------------
-                entity_mass = probs[:, 2:].mean()   # exclude floor
+                # entity_map = probs[:, 2:].mean()   # exclude floor
 
-                target = 0.3
+                # entity_target = 0.2
 
-                entity_loss = torch.abs(entity_mass - target)
+                # entity_loss = torch.abs(entity_map - entity_target)
 
-                g_loss += 0.3 * entity_loss
+                # g_loss += 0.2 * entity_loss
 
 
                 # ----------------------
                 # Entity density regularization to encourage more entities in generated rooms, by a lot
                 # ----------------------
-                enemy_mobs = probs[:, 3]   # ONLY entities enemy, chest, healing
+                enemy_map = probs[:, 3]   # Enemy Channel
+                enemy_density = enemy_map.mean(dim=(1, 2))  # Average enemy probability across the room for each sample in the batch
 
-                entity_density = enemy_mobs.mean()
+                target_density = density_targets[room_types]  # Get target density for each sample based on its room type
 
-                target_density = 0.4   # start small
+                enemy_loss = torch.abs((enemy_density - target_density) ** 2).mean()  # Average loss across the batch
 
-                entity_loss = torch.abs(entity_density - target_density)
-
-                g_loss += 0.9 * entity_loss
+                g_loss += 0.5 * enemy_loss
 
                 # # ---------------------
                 # # Room type embedding regularization to encourage more meaningful room type representations
@@ -206,7 +213,7 @@ def train_gan(generator, discriminator, dataloader, epochs=50, device='cpu'):
                 # g_loss = g_loss - 0.1 * empty_prob
 
                 # ---------------------
-                # Wall clustering promotes 
+                # Wall clustering penalty 
                 # ---------------------
                 wall_map = probs[:, 0] # Wall channel
 
@@ -224,7 +231,7 @@ def train_gan(generator, discriminator, dataloader, epochs=50, device='cpu'):
                 wall_density = wall_map.mean()
                 wall_density_loss = torch.abs(wall_density - 0.3)  # Target wall density can be tuned
 
-                g_loss += 0.9 * wall_cluster_loss + 0.6 * wall_density_loss
+                g_loss += 0.7 * wall_cluster_loss + 0.5 * wall_density_loss
 
                 # # ---------------------
                 # # Penalty for center bias spawning
