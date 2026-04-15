@@ -1,23 +1,23 @@
 '''
 Create 10K samples of Synthetic Data for GAN training. Mix with handmade data for better training. 
 '''
-import os
-import json
 import random
 from collections import deque
 
 #User files
-from engine.map_generator import Room, assign_room_type, place_doors, extract_room_matrix, enforce_reachable_door
+from engine.map_generator import Room, assign_room_type, extract_room_matrix, enforce_reachable_door
 from settings import ROOM_TILE_DICT, ROOM_WIDTH, ROOM_HEIGHT
 
-FLOOR = ROOM_TILE_DICT.get('.')
-WALL  = ROOM_TILE_DICT.get('#')
-DOOR  = ROOM_TILE_DICT.get('+')
-ENEMY = ROOM_TILE_DICT.get('E')
-CHEST = ROOM_TILE_DICT.get('C')
-HEALING = ROOM_TILE_DICT.get('H')
 
-DATA_PATH = 'game/data/synthetic_rooms_dataset.json'
+WALL = ROOM_TILE_DICT['WALL']
+FLOOR = ROOM_TILE_DICT['FLOOR']
+DOOR = ROOM_TILE_DICT['DOOR']
+ENEMY = ROOM_TILE_DICT['ENEMY']
+CHEST = ROOM_TILE_DICT['CHEST']
+HEALING = ROOM_TILE_DICT['HEALING']
+
+MIN_ENEMIES = 8
+MAX_ENEMIES = 24
 
 
 def ensure_connected(room, doors):
@@ -87,6 +87,47 @@ def clear_door_paths(room_matrix, doors):
                     room_matrix[ny][nx] = FLOOR
 
 
+def create_healing_room(room_matrix):
+    height = len(room_matrix)
+    width = len(room_matrix[0])
+
+    cx = width // 2
+    cy = height // 2
+
+    # Place fountain
+    room_matrix[cy][cx] = HEALING
+
+    return room_matrix
+
+
+def create_loot_room(room_matrix, doors):
+    height = len(room_matrix)
+    width = len(room_matrix[0])
+
+    chest_count = random.randint(1, 3)
+
+    placed = 0
+    attempts = 0
+
+    while placed < chest_count and attempts < 50:
+        x = random.randint(1, width - 2)
+        y = random.randint(1, height - 2)
+
+        if room_matrix[y][x] != FLOOR:
+            attempts += 1
+            continue
+
+        # Avoid doors
+        if any(abs(x - dx) + abs(y - dy) <= 2 for dx, dy in doors):
+            attempts += 1
+            continue
+
+        room_matrix[y][x] = CHEST
+        placed += 1
+
+    return room_matrix
+
+
 def room_fill(room_matrix, room_type):
     height = len(room_matrix)
     width = len(room_matrix[0])
@@ -105,14 +146,37 @@ def room_fill(room_matrix, room_type):
     room_matrix = enforce_walls_on_edges(room_matrix)
 
     # -------------------------------------------------
+    # Check if room is boss or start, return early no modifications
+    # -------------------------------------------------
+    if room_type in ["start", "boss"]:
+        return room_matrix
+
+    # -------------------------------------------------
     # Get door positions
     # -------------------------------------------------
     doors = [(x, y) for y in range(height) for x in range(width) if room_matrix[y][x] == DOOR]
 
     # -------------------------------------------------
+    # Add healing fountain if room type is correct
+    # -------------------------------------------------
+    if room_type == "healing":
+        room_matrix = create_healing_room(room_matrix)
+        # clear_door_paths(room_matrix, doors)
+        return room_matrix
+
+    # -------------------------------------------------
+    # Add loot room if room type is correct
+    # -------------------------------------------------
+    if room_type == "loot":
+        room_matrix = create_loot_room(room_matrix, doors)
+        # clear_door_paths(room_matrix, doors)
+        return room_matrix
+
+    # -------------------------------------------------
     # Add obstacle clusters
     # -------------------------------------------------
-    num_clusters = random.randint(10, 24)
+    area = width * height           # default settings: 40 * 22 = 880
+    num_clusters = random.randint(area // 80, area // 40)   # Keep a ratio based on room size changes
 
     for _ in range(num_clusters):
         cx = random.randint(1, width - 2)
@@ -121,10 +185,10 @@ def room_fill(room_matrix, room_type):
         cluster_size = random.randint(3, 8)
 
         for _ in range(cluster_size):
-            dx = random.randint(-4, 4)
-            dy = random.randint(-4, 4)
+            cdx = random.randint(-4, 4)
+            cdy = random.randint(-4, 4)
 
-            nx, ny = cx + dx, cy + dy
+            nx, ny = cx + cdx, cy + cdy
 
             if 0 <= nx < width and 0 <= ny < height:
 
@@ -133,7 +197,7 @@ def room_fill(room_matrix, room_type):
                     continue
 
                 # Keep space around doors clear
-                if any(abs(nx - dx_) + abs(ny - dy_) <= 2 for dx_, dy_ in doors):
+                if any(abs(nx - dx) + abs(ny - dy) <= 2 for dx, dy in doors):
                     continue
 
                 room_matrix[ny][nx] = WALL
@@ -146,28 +210,28 @@ def room_fill(room_matrix, room_type):
     # -------------------------------------------------
     # STEP 5: Place enemies
     # -------------------------------------------------
-    if room_type not in ["start", "boss"]:
-        enemy_count = random.randint(24, 48)
+    enemy_count = random.randint(MIN_ENEMIES, MAX_ENEMIES)
 
-        placed = 0
-        attempts = 0
+    placed = 0
+    attempts = 0
 
-        while placed < enemy_count and attempts < 100:
-            x = random.randint(1, width - 2)
-            y = random.randint(1, height - 2)
+    while placed < enemy_count and attempts < 100:
+        x = random.randint(1, width - 2)
+        y = random.randint(1, height - 2)
 
-            if room_matrix[y][x] != FLOOR:
-                attempts += 1
-                continue
+        if room_matrix[y][x] != FLOOR:
+            attempts += 1
+            continue
 
-            # Avoid doors
-            if any(abs(x - dx_) + abs(y - dy_) <= 3 for dx_, dy_ in doors):
-                attempts += 1
-                continue
+        # Avoid doors
+        if any(abs(x - dx_) + abs(y - dy_) <= 3 for dx_, dy_ in doors):
+            attempts += 1
+            continue
 
-            room_matrix[y][x] = ENEMY
-            placed += 1
+        room_matrix[y][x] = ENEMY
+        placed += 1
 
+    # clear_door_paths(room_matrix, doors)
     return room_matrix
 
 
@@ -176,25 +240,13 @@ def generate_training_room():
     room = Room(0, 0, ROOM_WIDTH, ROOM_HEIGHT)
 
     assign_room_type(room)
-    place_doors(room.room_map)
 
-    room_matrix = extract_room_matrix(room)
+    # room_matrix = extract_room_matrix(room)
+    # room_matrix = room.room_map
 
     # Use procedural logic here instead of GAN
-    room_matrix = room_fill(room_matrix, room.type)
+    room_matrix = room_fill(room.room_map, room.type)
 
     room_matrix = enforce_reachable_door(room_matrix)
 
     return room_matrix, room.type
-
-
-def save_dataset(dataset, path=DATA_PATH):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-
-    with open(path, "w") as f:
-        json.dump(dataset, f)
-
-    print(f"\nSynthetic Dataset saved to {path}")
-
-
-

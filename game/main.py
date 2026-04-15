@@ -1,14 +1,18 @@
-import sys
 import pygame
-import random
-import json
 
 #User files
-from settings import *
+from settings import  SCREEN_WIDTH, SCREEN_HEIGHT, TILE_SIZE, FPS, ROOM_WIDTH, ROOM_HEIGHT
 from utils.load_and_scale import load_and_scale, load_img
 from engine.map_generator import generate_dungeon_room
 
 
+
+WALL = 'WALL'
+FLOOR = 'FLOOR'
+DOOR = 'DOOR'
+ENEMY = 'ENEMY'
+CHEST = 'CHEST'
+HEALING = 'HEALING'
 
 pygame.init()
 
@@ -106,7 +110,6 @@ def set_player_position(direction):
 #Updates the room in the world map the player moved to
 def move_rooms(room_pos, direction):
     x, y = room_pos
-    # print(f'Moved to room: {room_pos}')
 
     if direction == 'right':
         return (x + 1, y)
@@ -124,10 +127,9 @@ def move_rooms(room_pos, direction):
 def check_door_transition(player_x, player_y, room_map=room.room_map):
     px, py = player_x, player_y
 
-    if room_map[py][px] == '+':
+    if room_map[py][px] == DOOR:
         return True
 
-    # print(f'Didnt catch transition: {room_map[py][px]}')
     return False
 
 def handle_room_transition():
@@ -150,6 +152,7 @@ def handle_room_transition():
         # Generate new room
         new_room = generate_dungeon_room()
         # print(f'Entered new room: {new_pos}')
+        # print(f'New room type: {new_room.type}')
         world_map[new_pos] = {
             'room': new_room,
             'type': new_room.type,
@@ -187,7 +190,7 @@ while running:
             if (
                 0 <= new_x < len(room.room_map[0]) and
                 0 <= new_y < len(room.room_map) and
-                room.room_map[new_y][new_x] != "#"
+                room.room_map[new_y][new_x] != WALL
             ):
                 # print(player_x, player_y)
                 player_x = new_x
@@ -240,27 +243,27 @@ while running:
     # -------------
     for y, row in enumerate(room.room_map):
         for x, tile in enumerate(row):
-            if tile == "#":
+            if tile == WALL:
                 #Draws the png for the walls
                 screen.blit(wall_img, (x * TILE_SIZE, y * TILE_SIZE))
-            elif tile == ".":
+            elif tile == FLOOR:
                 #Draws the png for the floors
                 screen.blit(floor_img, (x * TILE_SIZE, y * TILE_SIZE))
-            elif tile == "+":
+            elif tile == DOOR:
                 screen.blit(door_surface, (x * TILE_SIZE, y * TILE_SIZE))
-            elif tile == 'E':
+            elif tile == ENEMY:
                 screen.blits((
                     (floor_img, (x * TILE_SIZE, y * TILE_SIZE)),
                     (bat_grey_img, (x * TILE_SIZE, y * TILE_SIZE))
                     )
                 )
-            elif tile == 'C':
+            elif tile == CHEST:
                 screen.blits((
                     (floor_img, (x * TILE_SIZE, y * TILE_SIZE)),
                     (chest_1_img, (x * TILE_SIZE, y * TILE_SIZE))
                     )
                 )
-            elif tile == 'H':
+            elif tile == HEALING:
                 screen.blits((
                     (floor_img, (x * TILE_SIZE, y * TILE_SIZE)),
                     (fountain_img, (x * TILE_SIZE, y * TILE_SIZE))

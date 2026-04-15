@@ -4,10 +4,18 @@ from collections import deque
 from settings import ROOM_TILE_DICT
 
 
-DOOR = ROOM_TILE_DICT.get('+')
-FLOOR = ROOM_TILE_DICT.get('.')
+DOOR = ROOM_TILE_DICT['DOOR']
+FLOOR = ROOM_TILE_DICT['FLOOR']
+ENEMY = ROOM_TILE_DICT['ENEMY']
+CHEST = ROOM_TILE_DICT['CHEST']
+HEALING = ROOM_TILE_DICT['HEALING']
+
+WALKABLE_TILES = {FLOOR, ENEMY, CHEST, HEALING}
 
 def doors_reachable(room):
+    '''
+    Use the Breadth-First Search algorithm to search all vertices of the room
+    '''
     height = len(room)
     width = len(room[0])
 
@@ -34,7 +42,7 @@ def doors_reachable(room):
         visited.add((x, y))
 
         for nx, ny in neighbors(x, y):
-            if room[ny][nx] in (FLOOR, DOOR):
+            if room[ny][nx] in WALKABLE_TILES or room[ny][nx] == DOOR:
                 queue.append((nx, ny))
 
     # Check all doors visited
@@ -66,7 +74,10 @@ def no_blocked_doors(room):
     return True
 
 
-def has_enough_floor(room, min_ratio=0.3, max_ratio=0.9):
+def has_enough_floor(room, room_type, min_ratio=0.3, max_ratio=0.9):
+    if room_type in ["start", "boss", "healing", "loot"]:
+        return True
+
     height = len(room)
     width = len(room[0])
 
@@ -75,16 +86,17 @@ def has_enough_floor(room, min_ratio=0.3, max_ratio=0.9):
         1 
         for y in range(height)
         for x in range(width)
-        if room[y][x] == FLOOR
+        if room[y][x] in WALKABLE_TILES
     )
 
     ratio = floor_count / total
+
     return min_ratio <= ratio <= max_ratio
 
 
-def is_valid_room(room):
+def is_valid_room(room, room_type):
     return (
         no_blocked_doors(room)
         and doors_reachable(room)
-        and has_enough_floor(room)
+        and has_enough_floor(room, room_type)
     )

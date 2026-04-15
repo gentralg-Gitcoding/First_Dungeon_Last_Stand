@@ -18,22 +18,29 @@ ROOM_HEIGHT = SCREEN_HEIGHT // TILE_SIZE
 #Max rooms until boss
 MAX_ROOMS = 10
 
+WALL = 'WALL'
+FLOOR = 'FLOOR'
+DOOR = 'DOOR'
+ENEMY = 'ENEMY'
+CHEST = 'CHEST'
+HEALING = 'HEALING'
+EMPTY = 'EMPTY' 
 
 # Legend
 ROOM_TILE_DICT = {
-    "#": 0,   # wall
-    ".": 1,   # floor
-    "+": 2,   # door
-    "E": 3,   # enemy
-    "C": 4,   # chest
-    "H": 5    # healing
+    WALL: 0,   # wall
+    FLOOR: 1,   # floor
+    DOOR: 2,   # door
+    ENEMY: 3,   # enemy
+    CHEST: 4,   # chest
+    HEALING: 5    # healing
 }
 
 GAN_TILE_DICT = {
-    "#": 0,   # wall
-    "E": 1,   # enemy
-    "C": 2,   # chest
-    "H": 3    # healing
+    EMPTY: 0,   # empty
+    ENEMY: 1,   # enemy
+    CHEST: 2,   # chest
+    HEALING : 3    # healing
 }
 
 ROOM_TYPES = {
@@ -45,17 +52,18 @@ ROOM_TYPES = {
 }
 
 GAN_TO_ROOM_TILE = {
-    0: "#",
-    1: "E",
-    2: "C",
-    3: "H"
+    0: EMPTY,
+    1: ENEMY,
+    2: CHEST,
+    3: HEALING,
 }
 
 MATRIX_TO_ROOM_TILE = {
-    0:"#",   # wall
-    1:".",   # floor
-    2:"+",   # door
-    3:"E",   # enemy
-    4:"C",   # chest
-    5:"H"    # healing
+    0: WALL,   # wall
+    1: FLOOR,   # floor
+    2: DOOR,   # door
+    3: ENEMY,   # enemy
+    4: CHEST,   # chest
+    5: HEALING    # healing
 }
+
