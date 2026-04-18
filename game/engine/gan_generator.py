@@ -79,6 +79,7 @@ def train_gan(generator, discriminator, dataloader, epochs=50, device='cpu'):
     discriminator.to(device)
 
     bce_criterion = nn.BCELoss()
+
     class_weights = get_imbalanced_class_weights(dataloader.dataset).to(device)
     class_weights = torch.log(class_weights + 1)        #Prevent extreme weights that could destabilize training
     print(f"Using class weights: {class_weights}")
@@ -91,6 +92,30 @@ def train_gan(generator, discriminator, dataloader, epochs=50, device='cpu'):
         0.00,  # start
         0.00   # boss
     ], device=device)
+
+    wall_density_targets = torch.tensor([
+        0.50,  # enemy room = lots of walls
+        0.05,  # loot room = mostly open
+        0.01,  # healing room = almost empty
+        0.00,  # start
+        0.00   # boss
+    ], device=device)
+
+    # chest_density_targets = torch.tensor([
+    #     0.001,  # enemy room → rare
+    #     0.01,  # loot room → a few (THIS is key)
+    #     0.005, # healing room → almost none
+    #     0.0,   # start
+    #     0.002   # boss
+    # ], device=device)
+
+
+    H, W = ROOM_HEIGHT, ROOM_WIDTH
+    y = torch.linspace(-1, 1, H).view(1, H, 1).to(device)
+    x = torch.linspace(-1, 1, W).view(1, 1, W).to(device)
+
+    distance = torch.sqrt(x**2 + y**2)  # center = 0, edges = high
+    center_weight = torch.clamp(1 - distance, min=0)        # center = high value, prevent negative weights 
 
     g_opt = torch.optim.Adam(generator.parameters(), lr=0.0002)
     d_opt = torch.optim.Adam(discriminator.parameters(), lr=0.000001)  # Lower LR for discriminator to prevent overpowering generator
@@ -152,36 +177,21 @@ def train_gan(generator, discriminator, dataloader, epochs=50, device='cpu'):
 
                 probs = torch.softmax(fake_rooms, dim=1)
 
-                # # ----------------------
-                # # Entropy regularization to encourage more diverse tile distributions in generated rooms
-                # # ----------------------
-                # entropy = -(probs * torch.log(probs + 1e-8)).sum(dim=1).mean()
-
-                # g_loss -= 0.05 * entropy
-
-                # ----------------------
-                # Entity mass regularization to encourage a reasonable amount of entities in generated rooms (not too empty, not too crowded)
-                # ----------------------
-                # entity_map = probs[:, 2:].mean()   # exclude floor
-
-                # entity_target = 0.2
-
-                # entity_loss = torch.abs(entity_map - entity_target)
-
-                # g_loss += 0.2 * entity_loss
 
 
                 # ----------------------
-                # Entity density regularization to encourage more entities in generated rooms, by a lot
+                # Enemy density regularization to encourage more enemies in generated rooms, by a lot
                 # ----------------------
                 enemy_map = probs[:, 3]   # Enemy Channel
                 enemy_density = enemy_map.mean(dim=(1, 2))  # Average enemy probability across the room for each sample in the batch
 
-                target_density = density_targets[room_types]  # Get target density for each sample based on its room type
+                enemy_target_density = density_targets[room_types]  # Get target density for each sample based on its room type
 
-                enemy_loss = torch.abs((enemy_density - target_density) ** 2).mean()  # Average loss across the batch
+                enemy_loss = torch.abs((enemy_density - enemy_target_density) ** 2).mean()  # Average loss across the batch
 
-                g_loss += 0.5 * enemy_loss
+                g_loss += 0.6 * enemy_loss
+
+                
 
                 # # ---------------------
                 # # Room type embedding regularization to encourage more meaningful room type representations
@@ -191,26 +201,7 @@ def train_gan(generator, discriminator, dataloader, epochs=50, device='cpu'):
 
                 # g_loss = g_loss + 0.01 * type_strength  # Encourage stronger room type embeddings
 
-                # ---------------------
-                # Entity density penalty to encourage more interesting rooms, but not too much
-                # ---------------------
 
-                # enemy_density = probs[:, 3].mean()
-                # chest_density = probs[:, 4].mean()
-                # heal_density = probs[:, 5].mean()
-
-                # target_density = 0.5  # Target density for entities in a room, can be tuned
-                # entity_density = enemy_density + chest_density + heal_density
-                # density_penalty = torch.abs(entity_density - target_density)
-
-                # g_loss += 0.7 * density_penalty    # Encourage more entities overall, but not too much
-
-                # # ---------------------
-                # # Reward for empty space to prevent overcrowding
-                # # ---------------------
-                # empty_prob = entity_probs[:, 0].mean()
-
-                # g_loss = g_loss - 0.1 * empty_prob
 
                 # ---------------------
                 # Wall clustering penalty 
@@ -228,25 +219,65 @@ def train_gan(generator, discriminator, dataloader, epochs=50, device='cpu'):
                 # ----------------------
                 # Wall density penalty to encourage a reasonable amount of walls in generated rooms
                 # ----------------------
-                wall_density = wall_map.mean()
-                wall_density_loss = torch.abs(wall_density - 0.3)  # Target wall density can be tuned
+                # wall_density = wall_map.mean()
+                wall_density = wall_map.mean(dim=(1, 2))  # (B,)
 
-                g_loss += 0.7 * wall_cluster_loss + 0.5 * wall_density_loss
+                wall_density_loss = torch.abs((wall_density - wall_density_targets[room_types]) ** 2).mean()  # Average loss across the batch
+                # wall_density_loss = torch.abs(wall_density - 0.3)  # Target wall density can be tuned
 
-                # # ---------------------
-                # # Penalty for center bias spawning
-                # # ---------------------
-                # H, W = ROOM_HEIGHT, ROOM_WIDTH
-                # y_coords = torch.linspace(-1, 1, H).view(1, H, 1).to(device)
-                # x_coords = torch.linspace(-1, 1, W).view(1, 1, W).to(device)
+                g_loss += 0.7 * wall_cluster_loss + 0.7 * wall_density_loss
 
-                # distance = torch.sqrt(x_coords**2 + y_coords**2)
+                
+                # ----------------------
+                # Penalty for enemies being trapped by walls (encourage more open areas around enemies)
+                # ----------------------
+                neighbor_walls = (
+                    torch.roll(wall_map, 1, 1) +
+                    torch.roll(wall_map, -1, 1) +
+                    torch.roll(wall_map, 1, 2) +
+                    torch.roll(wall_map, -1, 2)
+                )
 
-                # center_weight = 1 - distance  # center = high value
+                # If enemy tile has many wall neighbors = bad
+                trapped_enemy_penalty = (enemy_map * neighbor_walls).mean()
 
-                # center_loss = -(entity_probs[:, 1] * center_weight).mean()
+                g_loss += 0.1 * trapped_enemy_penalty
 
-                # g_loss = g_loss + 0.1 * center_loss
+
+                # ----------------------
+                # Chest density penalty to encourage a cap on chests in loot rooms and fewer in enemy/healing rooms
+                # ----------------------
+                chest_map = probs[:, 4] # Chest channel
+                chest_density = chest_map.mean(dim=(1, 2))
+
+                max_chest_density = 0.05  # absolute cap
+
+                chest_overfill_penalty = torch.relu(chest_density - max_chest_density)
+
+                g_loss += 1.0 * chest_overfill_penalty.mean()     #Force hard cap on chest density to prevent unrealistic overfilling of chests
+
+                # ----------------------
+                # Fountain density penalty to encourage a cap on chests in loot rooms and fewer in enemy/healing rooms
+                # ----------------------
+                heal_map = probs[:, 5]  # Healing fountain channel
+                fountain_density = heal_map.mean(dim=(1, 2))
+
+                max_fountain_density = 0.01  # absolute cap
+
+                fountain_overfill_penalty = torch.relu(fountain_density - max_fountain_density)
+
+                g_loss += 1.0 * fountain_overfill_penalty.mean()     #Force hard cap on fountain density to prevent unrealistic overfilling of fountains
+
+                # ----------------------
+                # Additional reward for placing entities towards the center of the room
+                # ----------------------
+                
+                
+
+                center_reward = (heal_map + chest_map + wall_map) * center_weight
+                center_loss = -center_reward.mean()   # negative = reward
+
+                g_loss += 0.4 * center_loss
 
 
 

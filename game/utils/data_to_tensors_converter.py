@@ -56,7 +56,7 @@ def dataset_to_tensors(dataset):
     labels = []
 
     for i, entry in enumerate(dataset):
-        room_matrix = entry[f'room_matrix_{i}']
+        room_matrix = next(v for k, v in entry.items() if k.startswith("room_matrix"))
         room_type = entry['type']
 
         tensor = room_to_tensor(room_matrix)

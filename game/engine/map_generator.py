@@ -1,7 +1,11 @@
 import random
 import json
 import copy
+
+import numpy as np
 from engine.gan_generator import Generator, generate_room
+from ai.diffusion_generator import SimpleUNet, generate_diffusion_dungeon_room
+from utils.data_to_dataloader_converter import get_dataloader
 from settings import GAN_TILE_DICT, ROOM_HEIGHT, ROOM_WIDTH, MAX_ROOMS, ROOM_TILE_DICT, MATRIX_TO_ROOM_TILE, ROOM_TYPES
 from utils.save_load_data import load_json_dataset
 import torch 
@@ -11,27 +15,40 @@ import torch
 
 
 # NOTE: This bool flag is for running the game with synthetic data for testing purposes, DO NOT KEEP THIS IN FINAL GAME, ONLY FOR TESTING
-TESTING_SYNTH = False
+# options are "testing" or "controlled" or ""
+output_type = ''
 
 #NOTE: DO NOT KEEP, TESTING ONLY
-if TESTING_SYNTH:
+if output_type == "testing":
     DATASET = load_json_dataset('game/data/synthetic_rooms_dataset.json')
+
 
 WALL = 0  
 FLOOR = 1   
 DOOR = 2  
 ENEMY = 3   
 CHEST = 4  
-HEALING = 5    
-EMPTY = 0
+HEALING = 5
+
+GAN_PATH = "game/data/models/generator_epoch_49.pth"
+DIFFUSION_PATH = "game/data/models/diffusion_model.pth"
 
 # Room Tracker
 rooms = []
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+model_selection = "diffusion"  # Change to "gan" to use the GAN model instead
 
-GENERATOR = Generator(noise_dim=100, num_room_types=len(ROOM_TYPES))
-state_dict = torch.load("game/data/models/generator_epoch_49.pth", map_location=torch.device('cpu'))
+if model_selection == "gan":
+    GENERATOR = Generator(noise_dim=100, num_room_types=len(ROOM_TYPES))
+    state_dict = torch.load(GAN_PATH, map_location=torch.device('cpu'))
+elif model_selection == "diffusion":
+    GENERATOR = SimpleUNet(in_channels=6, num_room_types=len(ROOM_TYPES))
+    state_dict = torch.load(DIFFUSION_PATH, map_location=torch.device('cpu'))
+
 if state_dict:
     GENERATOR.load_state_dict(state_dict)
+    GENERATOR.to(device)
+    print(f"Loaded {model_selection} model from {GAN_PATH if model_selection == 'gan' else DIFFUSION_PATH}")
 
 
 class Room:
@@ -129,7 +146,7 @@ def apply_matrix_to_room_tiles(room, matrix):
     '''
     Convert numerical matrices into room tile characters from the MATRIX_TO_ROOM_TILE dict in settings
     '''
-    print(f"Applying matrix to room tiles using MATRIX_TO_ROOM_TILE: {MATRIX_TO_ROOM_TILE}")
+    # print(f"Applying matrix to room tiles using MATRIX_TO_ROOM_TILE: {MATRIX_TO_ROOM_TILE}")
 
     for y in range(room.h):
         for x in range(room.w):
@@ -141,7 +158,7 @@ def apply_matrix_to_room_tiles(room, matrix):
 
 def create_structure_mask(room_matrix):
     '''
-    Create a zero filled matrix and place a 1 on the matrix's walls, doors and edges to force rules for GAN model to not modify.
+    Create a zero filled matrix and place a 1 on the matrix's walls, doors and edges to force rules for models to not modify.
     '''
     height = len(room_matrix)
     width = len(room_matrix[0])
@@ -153,8 +170,8 @@ def create_structure_mask(room_matrix):
 
             tile = room_matrix[y][x]
 
-            # Protect walls and doors
-            if tile == WALL or tile == DOOR:  # wall or door
+            # Protect doors let the models modify the interior of the room but not the doors to ensure connectivity is always maintained
+            if tile == DOOR:  
                 mask[y][x] = 1  # LOCKED
 
             # Protect room edges
@@ -237,6 +254,10 @@ def enforce_reachable_door(matrix):
     return matrix
 
 def enforce_room_type_bias(matrix, room_type):
+    '''
+    Apply constraints to the generated room matrix to enforce stronger bias towards the assigned room type, can be used as a post process after generation. 
+    For example, an "enemy" room should have more enemies and less chests/healing, while a "healing" room should have more healing fountains and less enemies.
+    '''
     removal_count = 0
 
     for y in range(len(matrix)):
@@ -260,30 +281,6 @@ def enforce_room_type_bias(matrix, room_type):
     print(f"Enforced {removal_count} tile removals for room type bias towards {room_type} room.")
     return matrix
 
-# def ensure_minimum_entities(matrix, room_type):
-#     count = sum(cell in [ENEMY, CHEST, HEALING] for row in matrix for cell in row)
-
-#     if count == 0:
-#         # Force at least one spawn
-#         h = len(matrix)
-#         w = len(matrix[0])
-
-#         for _ in range(10):
-#             y = random.randint(1, h-2)
-#             x = random.randint(1, w-2)
-
-#             if matrix[y][x] == FLOOR:
-#                 if room_type == "enemy":
-#                     matrix[y][x] = ENEMY
-#                 elif room_type == "loot":
-#                     matrix[y][x] = CHEST
-#                 elif room_type == "healing":
-#                     matrix[y][x] = HEALING
-#                 break
-
-#     return matrix
-
-
 def boost_entities(matrix):
     '''
     Optional function to boost the number of entities in a room if the GAN is being too conservative, can be used as a post process after all constraints are applied.
@@ -301,11 +298,116 @@ def boost_entities(matrix):
                     matrix[y][x] = HEALING
     return matrix
 
+def remove_trapped_enemies(matrix):
+    '''Remove enemies that are completely encased by walls to prevent unfair spawns, can be used as a post process after all constraints are applied.'''
+    H = len(matrix)
+    W = len(matrix[0])
+    count = 0
+
+    for y in range(1, H-1):
+        for x in range(1, W-1):
+            if matrix[y][x] == ENEMY:
+                neighbors = [
+                    matrix[y+1][x], matrix[y-1][x],
+                    matrix[y][x+1], matrix[y][x-1]
+                ]
+                if all(n == WALL for n in neighbors):
+                    count += 1
+                    matrix[y][x] = FLOOR
+
+    print(f"Saved {count} trapped enemies.")
+    return matrix
+
+def clean_generated_doors(matrix, original_matrix):
+    height, width = matrix.shape
+    count = 0
+
+    for y in range(height):
+        for x in range(width):
+
+            # If it's a door in generated output
+            if matrix[y][x] == DOOR:
+
+                # Keep ONLY if it was originally a door
+                if original_matrix[y][x] != DOOR:
+                    matrix[y][x] = FLOOR
+                    count += 1
+    print(f"{count} Doors cleaned from generated output.")
+    return matrix
+
+def enforce_entity_limits(matrix, room_type):
+
+    limits = {
+        "loot": {4: (1, 3)},
+        "healing": {5: (1, 2)},
+        "enemy": {3: (24, 48)}
+    }
+    type_limits = limits.get(room_type, {})
+    added_count = 0
+    removed_count = 0
+
+    for tile_type, (min_limit, max_limit) in type_limits.items():
+        count = np.sum(matrix == tile_type)     # Count current entities of this type
+
+        # If we are over max limit, start removing entities randomly until we are under the max limit
+        if count > max_limit:
+            tile_positions = np.argwhere(matrix == tile_type) # Get all positions of this tile type
+
+            np.random.shuffle(tile_positions)  # Shuffle to add randomness to removal
+
+            for y, x in tile_positions[:(count - max_limit)]:
+                matrix[y][x] = FLOOR
+                count -= 1
+                removed_count += 1
+
+
+        # Hard enforce min limits if we are under the minimum limit by placing entities randomly until we reach the minimum limit
+        elif count < min_limit:
+            # Get all valid floor positions for potential entity placement, excluding edges to prevent unfair placements
+            floor_positions = [
+                (y, x) for y, x in np.argwhere(matrix == FLOOR)
+                if 0 < y < matrix.shape[0]-1 and 0 < x < matrix.shape[1]-1
+            ]
+
+            np.random.shuffle(floor_positions)  # Shuffle to add randomness to placement
+
+            for y, x in floor_positions[:(min_limit - count)]:
+                matrix[y][x] = tile_type
+                added_count += 1
+
+
+    print(f"Initially had {count} entities in {room_type} room.")
+    print(f"Added {added_count} entities and removed {removed_count} entities.")
+    return matrix
+
+
+def get_noise_schedule(T=200, device="cpu"):
+    beta_start = 1e-4
+    beta_end = 0.02
+
+    betas = torch.linspace(beta_start, beta_end, T).to(device)
+    alphas = 1.0 - betas
+    alphas_cumprod = torch.cumprod(alphas, dim=0)
+
+    return alphas_cumprod
+
+def tensor_to_tilemap(tensor):
+    '''Convert diffusion output tensor into tilemap matrix of tile indices'''
+    print("Incoming tensor shape:", tensor.shape)
+    tensor = tensor.squeeze(0)              # remove batch
+
+    matrix = torch.argmax(tensor, dim=0)    # (H, W)
+    print("After argmax:", matrix.shape)
+    matrix = matrix.cpu().numpy()
+    return matrix
+
+
+
 def generate_dungeon_room(width = ROOM_WIDTH, height = ROOM_HEIGHT):
     room = Room(0, 0, width, height)
 
     #NOTE: Test premade maps, DO NOT KEEP THIS
-    if TESTING_SYNTH:
+    if output_type == "testing":
         #Copy the dataset, DO NOT MODIFY THE DATA
         dataset_copy = random.choice(copy.deepcopy(DATASET))
         room.room_map, room.type = dict.values(dataset_copy)
@@ -325,25 +427,80 @@ def generate_dungeon_room(width = ROOM_WIDTH, height = ROOM_HEIGHT):
         # Create structure mask
         mask = create_structure_mask(room.room_map)
 
-        # Generate GAN created room
-        gan_matrix = generate_room(GENERATOR, room.type, room.w, room.h)
+        if model_selection == "gan":
+            # Generate GAN created room
+            gan_matrix = generate_room(GENERATOR, room.type, room.w, room.h)
 
-        # Apply constraints to control the GAN
-        gan_enforced_matrix = enforce_room_type_bias(gan_matrix, room.type)
+            if output_type == "controlled":
 
-        # Apply cross entity transform turning GAN matrix values into room matrix values
-        entity_matrix = apply_entities(room.room_map, gan_enforced_matrix, mask)
+                # Apply constraints to control the room type 
+                gan_enforced_matrix = enforce_room_type_bias(gan_matrix, room.type)
 
-        # entity_matrix = ensure_minimum_entities(entity_matrix, room.type)
+                # Apply cross entity transform turning GAN matrix values into room matrix values
+                entity_matrix = apply_entities(room.room_map, gan_enforced_matrix, mask)
 
-        # Connectivity Check to make sure all doors have room for movement
-        final_matrix = enforce_reachable_door(entity_matrix)
+                # Remove walls encasing enemies to prevent unfair spawns
+                entity_matrix = remove_trapped_enemies(entity_matrix)
 
-        # Draw final matrix transform into room tile characters
-        final_matrix = apply_matrix_to_room_tiles(room, final_matrix)
+                entity_matrix = enforce_entity_limits(entity_matrix, room.type)
 
-        return final_matrix
-    else: 
-        final_matrix = apply_matrix_to_room_tiles(room, room.room_map)
+                # Connectivity Check to make sure all doors have room for movement
+                final_matrix = enforce_reachable_door(entity_matrix)
 
-        return final_matrix
+                # Draw final matrix transform into room tile characters
+                final_room = apply_matrix_to_room_tiles(room, final_matrix)
+
+                return final_room
+            else:
+                final_room = apply_matrix_to_room_tiles(room, gan_matrix)
+                return final_room
+
+        elif model_selection == "diffusion":
+            # Generate Diffusion created room
+            alphas_cumprod = get_noise_schedule(device=device)
+
+            diff_tensor = generate_diffusion_dungeon_room(
+                GENERATOR,
+                ROOM_TYPES[room.type],
+                room.room_map,
+                mask,
+                alphas_cumprod,
+                device
+            )
+
+            # tensor_to_tilemap
+            diff_matrix = diff_tensor.squeeze(0).cpu().numpy() # (H, W)
+
+            unique, counts = np.unique(diff_matrix, return_counts=True)
+            print(f"Tensor to Tilemaps Matrix Counts: {dict(zip(unique, counts))}")
+
+            if output_type == "controlled":
+
+                # enforce structure (walls + doors)
+                for y in range(len(room.room_map)):
+                    for x in range(len(room.room_map[0])):
+                        if mask[y][x] == 1:     # Only modify non-locked tiles
+                            diff_matrix[y][x] = room.room_map[y][x]
+
+
+                # Post process diffusion output with same constraints as GAN to control room type and ensure playability
+                diff_matrix = enforce_room_type_bias(diff_matrix, room.type)
+                diff_matrix = clean_generated_doors(diff_matrix, room.room_map)
+                diff_matrix = remove_trapped_enemies(diff_matrix)
+                diff_matrix = enforce_entity_limits(diff_matrix, room.type)
+                diff_matrix = enforce_reachable_door(diff_matrix)
+
+                # Draw final matrix transform into room tile characters
+                final_room = apply_matrix_to_room_tiles(room, diff_matrix)
+
+                return final_room
+            
+            else:
+                final_room = apply_matrix_to_room_tiles(room, diff_matrix)
+                return final_room
+
+    else:
+        #Return original room (start or boss)
+        final_room = apply_matrix_to_room_tiles(room, room.room_map)
+
+        return final_room
