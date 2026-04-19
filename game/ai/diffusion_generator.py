@@ -57,7 +57,7 @@ class Block(nn.Module):
 
 # --- Simple UNet ---
 class SimpleUNet(nn.Module):
-    def __init__(self, in_channels, num_room_types, time_dim=128):
+    def __init__(self, in_channels=6, num_room_types=5, time_dim=128):
         super().__init__()
 
         self.time_embed = TimeEmbedding(time_dim)
@@ -77,12 +77,13 @@ class SimpleUNet(nn.Module):
 
     def forward(self, x, t, room_type):
         t_emb = self.time_embed(t)
-        t_emb = t_emb + self.type_embedding(room_type)
+        type_emb = self.type_embedding(room_type)
+        combined_emb = t_emb + type_emb
 
         # Down
-        x1 = self.b1(x, t_emb)
+        x1 = self.b1(x, combined_emb)
         x2 = self.pool(x1)
-        x2 = self.b2(x2, t_emb)
+        x2 = self.b2(x2, combined_emb)
 
         # Up
         x3 = self.up1(x2)
@@ -93,7 +94,7 @@ class SimpleUNet(nn.Module):
 
         x3 = torch.cat([x3, x1], dim=1)
 
-        x3 = self.b3(x3, t_emb)
+        x3 = self.b3(x3, combined_emb)
 
         return self.out(x3)
     
@@ -310,7 +311,7 @@ def generate_diffusion_dungeon_room(model, room_type, room_matrix, mask, alphas_
                 noise = torch.randn_like(x)
                 x += temperature * (1 - alpha_t).sqrt() * noise
 
-    tiles = torch.argmax(torch.softmax(x/0.5, dim=1), dim=1)
+    # tiles = torch.argmax(torch.softmax(x/0.5, dim=1), dim=1)
     probs = torch.softmax(x, dim=1)
     tiles = torch.multinomial(probs.permute(0,2,3,1).reshape(-1, 6), 1)
     tiles = tiles.reshape(x.shape[0], x.shape[2], x.shape[3])

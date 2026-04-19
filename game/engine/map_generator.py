@@ -319,7 +319,8 @@ def remove_trapped_enemies(matrix):
     return matrix
 
 def clean_generated_doors(matrix, original_matrix):
-    height, width = matrix.shape
+    height = len(matrix)
+    width = len(matrix[0])
     count = 0
 
     for y in range(height):
@@ -342,6 +343,9 @@ def enforce_entity_limits(matrix, room_type):
         "healing": {5: (1, 2)},
         "enemy": {3: (24, 48)}
     }
+    if limits.get(room_type, {}) == {}:
+        return Room(0, 0, ROOM_WIDTH, ROOM_HEIGHT).room_map
+
     type_limits = limits.get(room_type, {})
     added_count = 0
     removed_count = 0
