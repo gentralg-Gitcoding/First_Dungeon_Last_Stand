@@ -275,9 +275,9 @@ def train_gan(generator, discriminator, dataloader, epochs=50, device='cpu'):
                 
 
                 center_reward = (heal_map + chest_map + wall_map) * center_weight
-                center_loss = -center_reward.mean()   # negative = reward
+                center_reward = -center_reward.mean()   # negative = reward
 
-                g_loss += 0.4 * center_loss
+                g_loss += 0.7 * center_reward
 
 
 

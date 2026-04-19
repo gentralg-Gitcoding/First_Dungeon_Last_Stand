@@ -123,8 +123,6 @@ class DiffusionWrapper:
 
         return tiles.squeeze(0).cpu().numpy()
 
-
-
 def load_model(model_path, model_selection):
     if model_selection == "Gans":
         model = Generator().to(DEVICE)
@@ -141,6 +139,20 @@ def tile_distribution(room):
     unique, counts = np.unique(room, return_counts=True)
     return {MATRIX_TO_ROOM_TILE[int(k)]: int(v) for k, v in zip(unique, counts)}     #Streamlit does not like numpy ints
 
+def apply_original_room(room, original_room):
+    '''
+    Put wall edges back if generation altered it
+    '''
+    for y in range(len(original_room)):
+        for x in range(len(original_room[0])):
+            # put structural edges back
+            if (
+                x == 0 or x == len(original_room[0]) - 1 or
+                y == 0 or y == len(original_room) - 1
+            ):
+                room[y][x] = original_room[y][x]
+    return room
+
 def post_process(room, room_type):
     '''Use post process functions to control and structure dungeon layout after generation'''
     room = enforce_room_type_bias(room, room_type)
@@ -148,4 +160,5 @@ def post_process(room, room_type):
     room = remove_trapped_enemies(room)
     room = enforce_entity_limits(room, room_type)
     room = enforce_reachable_door(room)
+    room = apply_original_room(room, OG_ROOM)
     return room
