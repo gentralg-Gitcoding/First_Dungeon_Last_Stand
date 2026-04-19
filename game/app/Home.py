@@ -2,7 +2,7 @@ import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
-from app.inference import CMAP, DIFFUSION_PATH, GAN_PATH, OG_ROOM, ROOM_TYPES, TILE_COLORS, load_model, post_process, tile_distribution
+from inference import CMAP, DIFFUSION_PATH, GAN_PATH, OG_ROOM, ROOM_TYPES, TILE_COLORS, load_model, post_process, tile_distribution
 
 st.set_page_config(page_title="Dungeon Generator", layout="centered")
 
