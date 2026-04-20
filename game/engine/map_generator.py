@@ -17,10 +17,14 @@ import torch
 
 
 # NOTE: This bool flag is for running the game with synthetic data for testing purposes, DO NOT KEEP THIS IN FINAL GAME, ONLY FOR TESTING
-# options are "testing" or "controlled" or ""
-output_type = 'controlled'
+OUTPUT_OPTIONS = [
+    "controlled",
+    "testing",
+    ""
+]
+output_type = OUTPUT_OPTIONS[0]
 
-#NOTE: DO NOT KEEP, TESTING ONLY
+# NOTE: DO NOT KEEP, USED FOR TESTING SYNTHETIC DATA
 if output_type == "testing":
     DATASET = load_json_dataset('game/data/synthetic_rooms_dataset.json')
 
@@ -480,7 +484,7 @@ def generate_dungeon_room(width = ROOM_WIDTH, height = ROOM_HEIGHT):
 
         elif model_selection == "diffusion":
             # Generate Diffusion created room
-            alphas_cumprod = get_noise_schedule(device=device)
+            alphas_cumprod = get_noise_schedule(device=DEVICE)
 
             diff_tensor = generate_diffusion_dungeon_room(
                 GENERATOR,
@@ -488,7 +492,7 @@ def generate_dungeon_room(width = ROOM_WIDTH, height = ROOM_HEIGHT):
                 room.room_map,
                 mask,
                 alphas_cumprod,
-                device
+                DEVICE
             )
 
             # tensor_to_tilemap
