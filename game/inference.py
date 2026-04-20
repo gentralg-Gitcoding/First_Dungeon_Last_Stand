@@ -1,3 +1,5 @@
+import os
+
 import torch
 import numpy as np
 from ai.gan_generator import Generator 
@@ -8,6 +10,7 @@ from engine.map_generator import (
 )
 from settings import MATRIX_TO_ROOM_TILE, ROOM_HEIGHT, ROOM_WIDTH, ROOM_TYPES
 import matplotlib.colors as mcolors
+from huggingface_hub import hf_hub_download
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -126,14 +129,34 @@ class DiffusionWrapper:
 def load_model(model_path, model_selection):
     if model_selection == "Gans":
         model = Generator().to(DEVICE)
-        model.load_state_dict(torch.load(model_path, map_location=DEVICE))
-        model.eval()
-        return GANWrapper(model)
+        if os.path.exists(model_path):
+            model.load_state_dict(torch.load(model_path, map_location=DEVICE))
+            model.eval()
+            return GANWrapper(model)
+        else:
+            hf_path = hf_hub_download(
+                repo_id="gentralg/GANs-Dungeon-Floor-Entities",
+                filename="gans_model.pth"
+            )
+            print(f"Loaded model from HF repo: {hf_path.repo_id}")
+            model.load_state_dict(torch.load(hf_path, map_location=DEVICE))
+            model.eval()
+            return GANWrapper(model)
     elif model_selection == "Diffusion":
         model = SimpleUNet().to(DEVICE)
-        model.load_state_dict(torch.load(model_path, map_location=DEVICE))
-        model.eval()
-        return DiffusionWrapper(model)
+        if os.path.exists(model_path):
+            model.load_state_dict(torch.load(model_path, map_location=DEVICE))
+            model.eval()
+            return DiffusionWrapper(model)
+        else:
+            hf_path = hf_hub_download(
+                repo_id="gentralg/Diffusion-Dungeon-Floor-Entities",
+                filename="diffusion_model.pth"
+            )
+            print(f"Loaded model from HF repo: {hf_path.repo_id}")
+            model.load_state_dict(torch.load(hf_path, map_location=DEVICE))
+            model.eval()
+            return DiffusionWrapper(model)
 
 def tile_distribution(room):
     unique, counts = np.unique(room, return_counts=True)
