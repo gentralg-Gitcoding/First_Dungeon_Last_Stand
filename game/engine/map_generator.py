@@ -1,7 +1,9 @@
+import os
 import random
 import json
 import copy
 
+from huggingface_hub import hf_hub_download
 import numpy as np
 from ai.gan_generator import Generator, generate_room
 from ai.diffusion_generator import SimpleUNet, generate_diffusion_dungeon_room
@@ -16,7 +18,7 @@ import torch
 
 # NOTE: This bool flag is for running the game with synthetic data for testing purposes, DO NOT KEEP THIS IN FINAL GAME, ONLY FOR TESTING
 # options are "testing" or "controlled" or ""
-output_type = ''
+output_type = 'controlled'
 
 #NOTE: DO NOT KEEP, TESTING ONLY
 if output_type == "testing":
@@ -32,23 +34,40 @@ HEALING = 5
 
 GAN_PATH = "game/data/models/generator_epoch_49.pth"
 DIFFUSION_PATH = "game/data/models/diffusion_model.pth"
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 # Room Tracker
 rooms = []
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model_selection = "diffusion"  # Change to "gan" to use the GAN model instead
 
 if model_selection == "gan":
-    GENERATOR = Generator(noise_dim=100, num_room_types=len(ROOM_TYPES))
-    state_dict = torch.load(GAN_PATH, map_location=torch.device('cpu'))
+    if os.path.exists(GAN_PATH):
+        GENERATOR = Generator(noise_dim=100, num_room_types=len(ROOM_TYPES))
+        state_dict = torch.load(GAN_PATH, map_location=DEVICE)
+        print(f"Loaded {model_selection} model from {GAN_PATH}")
+    else:
+        hf_path = hf_hub_download(
+            repo_id="gentralg/GANs-Dungeon-Floor-Entities",
+            filename="gans_model.pth"
+        )
+        print(f"Loaded model from HF repo: {hf_path.repo_id}")
+        state_dict = torch.load(hf_path, map_location=DEVICE)
 elif model_selection == "diffusion":
-    GENERATOR = SimpleUNet(in_channels=6, num_room_types=len(ROOM_TYPES))
-    state_dict = torch.load(DIFFUSION_PATH, map_location=torch.device('cpu'))
+    if os.path.exists(DIFFUSION_PATH):
+        GENERATOR = SimpleUNet(in_channels=6, num_room_types=len(ROOM_TYPES))
+        state_dict = torch.load(DIFFUSION_PATH, map_location=DEVICE)
+        print(f"Loaded {model_selection} model from {DIFFUSION_PATH}")
+    else:
+        hf_path = hf_hub_download(
+            repo_id="gentralg/Diffusion-Dungeon-Floor-Entities",
+            filename="diffusion_model.pth"
+        )
+        print(f"Loaded model from HF repo: {hf_path.repo_id}")
+        state_dict = torch.load(hf_path, map_location=DEVICE)
 
 if state_dict:
     GENERATOR.load_state_dict(state_dict)
-    GENERATOR.to(device)
-    print(f"Loaded {model_selection} model from {GAN_PATH if model_selection == 'gan' else DIFFUSION_PATH}")
+    GENERATOR.to(DEVICE)
 
 
 class Room:
