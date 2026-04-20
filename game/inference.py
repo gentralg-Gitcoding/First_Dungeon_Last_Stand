@@ -136,7 +136,7 @@ def load_model(model_path, model_selection):
         else:
             hf_path = hf_hub_download(
                 repo_id="gentralg/GANs-Dungeon-Floor-Entities",
-                filename="gans_model.pth"
+                filename="generator_model.pth"
             )
             print(f"Loaded model from HF repo: {hf_path}")
             model.load_state_dict(torch.load(hf_path, map_location=DEVICE))

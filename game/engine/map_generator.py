@@ -48,7 +48,7 @@ if model_selection == "gan":
     else:
         hf_path = hf_hub_download(
             repo_id="gentralg/GANs-Dungeon-Floor-Entities",
-            filename="gans_model.pth"
+            filename="generator_model.pth"
         )
         print(f"Loaded model from HF repo: {hf_path}")
         state_dict = torch.load(hf_path, map_location=DEVICE)
