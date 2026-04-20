@@ -205,12 +205,21 @@ def compute_type_distributions(X, room_types, num_types):
 
 def create_diffusion_structure_mask(x):
     # x: (B, C, H, W)
+    B, _, H, W = x.shape
 
     wall_mask = x[:, 0:1, :, :]   # WALL channel
-    # door_mask = x[:, 2:3, :, :]   # DOOR channel
+    door_mask = x[:, 2:3, :, :]   # DOOR channel
 
     # structure_mask = torch.clamp(door_mask, 0, 1)
-    structure_mask = torch.zeros_like(wall_mask)
+    # structure_mask = (wall_mask > 0).float()
+
+    edge_mask = torch.zeros((B, 1, H, W), device=x.device)
+    edge_mask[:, :, 0, :] = 1
+    edge_mask[:, :, -1, :] = 1
+    edge_mask[:, :, :, 0] = 1
+    edge_mask[:, :, :, -1] = 1
+
+    structure_mask = torch.clamp(wall_mask + door_mask + edge_mask, 0, 1)
 
     return structure_mask  # (B, 1, H, W)
 
@@ -284,7 +293,7 @@ def train_diffusion_model(model, dataloader, optimizer, alphas_cumprod, epochs =
             # Noise loss 
             noise_loss = ((predicted_noise - noise) ** 2) # element-wise loss
             noise_loss *= (1 - structure_mask)
-            noise_loss *=  class_weights.view(1, -1, 1, 1)
+            # noise_loss *=  class_weights.view(1, -1, 1, 1)
 
             noise_loss = noise_loss.mean()
 
