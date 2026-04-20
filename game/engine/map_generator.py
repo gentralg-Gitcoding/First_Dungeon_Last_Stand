@@ -50,7 +50,7 @@ if model_selection == "gan":
             repo_id="gentralg/GANs-Dungeon-Floor-Entities",
             filename="gans_model.pth"
         )
-        print(f"Loaded model from HF repo: {hf_path.repo_id}")
+        print(f"Loaded model from HF repo: {hf_path}")
         state_dict = torch.load(hf_path, map_location=DEVICE)
 elif model_selection == "diffusion":
     if os.path.exists(DIFFUSION_PATH):
@@ -62,7 +62,7 @@ elif model_selection == "diffusion":
             repo_id="gentralg/Diffusion-Dungeon-Floor-Entities",
             filename="diffusion_model.pth"
         )
-        print(f"Loaded model from HF repo: {hf_path.repo_id}")
+        print(f"Loaded model from HF repo: {hf_path}")
         state_dict = torch.load(hf_path, map_location=DEVICE)
 
 if state_dict:

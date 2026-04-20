@@ -138,7 +138,7 @@ def load_model(model_path, model_selection):
                 repo_id="gentralg/GANs-Dungeon-Floor-Entities",
                 filename="gans_model.pth"
             )
-            print(f"Loaded model from HF repo: {hf_path.repo_id}")
+            print(f"Loaded model from HF repo: {hf_path}")
             model.load_state_dict(torch.load(hf_path, map_location=DEVICE))
             model.eval()
             return GANWrapper(model)
@@ -153,7 +153,7 @@ def load_model(model_path, model_selection):
                 repo_id="gentralg/Diffusion-Dungeon-Floor-Entities",
                 filename="diffusion_model.pth"
             )
-            print(f"Loaded model from HF repo: {hf_path.repo_id}")
+            print(f"Loaded model from HF repo: {hf_path}")
             model.load_state_dict(torch.load(hf_path, map_location=DEVICE))
             model.eval()
             return DiffusionWrapper(model)
