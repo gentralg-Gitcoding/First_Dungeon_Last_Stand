@@ -41,8 +41,8 @@ rooms = []
 model_selection = "diffusion"  # Change to "gan" to use the GAN model instead
 
 if model_selection == "gan":
+    GENERATOR = Generator()
     if os.path.exists(GAN_PATH):
-        GENERATOR = Generator(noise_dim=100, num_room_types=len(ROOM_TYPES))
         state_dict = torch.load(GAN_PATH, map_location=DEVICE)
         print(f"Loaded {model_selection} model from {GAN_PATH}")
     else:
@@ -53,8 +53,8 @@ if model_selection == "gan":
         print(f"Loaded model from HF repo: {hf_path}")
         state_dict = torch.load(hf_path, map_location=DEVICE)
 elif model_selection == "diffusion":
+    GENERATOR = SimpleUNet()
     if os.path.exists(DIFFUSION_PATH):
-        GENERATOR = SimpleUNet(in_channels=6, num_room_types=len(ROOM_TYPES))
         state_dict = torch.load(DIFFUSION_PATH, map_location=DEVICE)
         print(f"Loaded {model_selection} model from {DIFFUSION_PATH}")
     else:
