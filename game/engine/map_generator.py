@@ -3,7 +3,7 @@ import json
 import copy
 
 import numpy as np
-from engine.gan_generator import Generator, generate_room
+from ai.gan_generator import Generator, generate_room
 from ai.diffusion_generator import SimpleUNet, generate_diffusion_dungeon_room
 from utils.data_to_dataloader_converter import get_dataloader
 from settings import GAN_TILE_DICT, ROOM_HEIGHT, ROOM_WIDTH, MAX_ROOMS, ROOM_TILE_DICT, MATRIX_TO_ROOM_TILE, ROOM_TYPES

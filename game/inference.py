@@ -1,6 +1,6 @@
 import torch
 import numpy as np
-from engine.gan_generator import Generator 
+from ai.gan_generator import Generator 
 from ai.diffusion_generator import SimpleUNet, room_to_tensor
 from engine.map_generator import (
     Room, clean_generated_doors, create_structure_mask, enforce_entity_limits, 
@@ -68,10 +68,12 @@ class GANWrapper:
             output = self.model(x, room_type)
 
         return torch.argmax(output, dim=1).squeeze(0).cpu().numpy()
-    
+
 class DiffusionWrapper:
     def __init__(self, model):
         self.model = model
+        self.input_channels = 6
+        self.num_room_types = 5
 
     def generate(self, room_type_str="start"):
         room = Room(0, 0, ROOM_WIDTH, ROOM_HEIGHT).room_map
@@ -81,21 +83,19 @@ class DiffusionWrapper:
 
         room_tensor = room_to_tensor(room)
         room_tensor = torch.tensor(room_tensor, dtype=torch.float32).unsqueeze(0).to(DEVICE)
-        # Convert room_tensor to hard labels
-        room_labels = torch.argmax(room_tensor, dim=1, keepdim=True)
 
         # start from noise but keep structure intact
         x = torch.randn_like(room_tensor).to(DEVICE)
 
         # Create one-hot version of room from noise
-        room_onehot = torch.nn.functional.one_hot(room_labels.squeeze(1), num_classes=x.shape[1])
+        room_labels = torch.argmax(room_tensor, dim=1, keepdim=True)
+        room_onehot = torch.nn.functional.one_hot(room_labels.squeeze(1), num_classes=self.input_channels)
         room_onehot = room_onehot.permute(0, 3, 1, 2).float()
 
         # Convert mask to tensor
         mask_tensor = torch.tensor(mask, dtype=torch.float32).to(DEVICE)
-        mask_expanded = mask_tensor.unsqueeze(0).unsqueeze(0).repeat(1, x.shape[1], 1, 1)
+        mask_expanded = mask_tensor.unsqueeze(0).unsqueeze(0).repeat(1, self.input_channels, 1, 1)
 
-        
         T = len(alphas_cumprod)
         temperature = 0.4   # How creative we want the model to be higher = chaos
 
@@ -118,7 +118,7 @@ class DiffusionWrapper:
                         x += temperature * (1 - alpha_t).sqrt() * noise
 
             probs = torch.softmax(x, dim=1)
-            tiles = torch.multinomial(probs.permute(0,2,3,1).reshape(-1, 6), 1)
+            tiles = torch.multinomial(probs.permute(0,2,3,1).reshape(-1, self.input_channels), 1)
             tiles = tiles.reshape(x.shape[0], x.shape[2], x.shape[3])
 
         return tiles.squeeze(0).cpu().numpy()

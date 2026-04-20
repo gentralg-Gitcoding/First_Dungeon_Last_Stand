@@ -1,7 +1,7 @@
 import torch
 
 # User files
-from engine.gan_generator import Generator, Discriminator, train_gan
+from ai.gan_generator import Generator, Discriminator, train_gan
 from utils.data_to_dataloader_converter import get_dataloader
 
 DATA_PATH = "game/data/synthetic_rooms_tensors.npz"

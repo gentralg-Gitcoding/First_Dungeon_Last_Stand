@@ -6,14 +6,6 @@ from utils.data_to_dataloader_converter import get_dataloader
 
 DATA_PATH = "game/data/diffusion_tensors.npz"
 
-ROOM_TYPES = {
-    "enemy": 0,
-    "loot": 1,
-    "healing": 2,
-    "start": 3,
-    "boss": 4,
-}
-
 def get_noise_schedule(T=200, device="cpu"):
     beta_start = 1e-4
     beta_end = 0.02
@@ -40,7 +32,7 @@ def main():
     # -----------------------
     # Initialize Models
     # -----------------------
-    generator = SimpleUNet(in_channels=6, num_room_types=len(ROOM_TYPES)).to(device)
+    generator = SimpleUNet().to(device)
     optimizer = torch.optim.Adam(generator.parameters(), lr=1e-4)
 
     # -----------------------

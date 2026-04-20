@@ -57,21 +57,24 @@ class Block(nn.Module):
 
 # --- Simple UNet ---
 class SimpleUNet(nn.Module):
-    def __init__(self, in_channels=6, num_room_types=5, time_dim=128):
+    def __init__(self, in_channels=6, num_room_types=5, time_dim=128):    # in_channels = 6 tiles + 5 room types
         super().__init__()
+
+        self.num_room_types = num_room_types
+        total_in_channels = in_channels + num_room_types
 
         self.time_embed = TimeEmbedding(time_dim)
         self.type_embedding = nn.Embedding(num_room_types, time_dim)
 
         # Down
-        self.b1 = Block(in_channels, 64, time_dim)
+        self.b1 = Block(total_in_channels, 64, time_dim)
         self.b2 = Block(64, 128, time_dim)
 
         # Up
         self.up1 = nn.ConvTranspose2d(128, 64, 2, stride=2)
         self.b3 = Block(128, 64, time_dim)  # skip connection
 
-        self.out = nn.Conv2d(64, in_channels, 1)
+        self.out = nn.Conv2d(64, in_channels, 1)    # Keep output same as original channels
 
         self.pool = nn.MaxPool2d(2)
 
@@ -79,6 +82,14 @@ class SimpleUNet(nn.Module):
         t_emb = self.time_embed(t)
         type_emb = self.type_embedding(room_type)
         combined_emb = t_emb + type_emb
+
+        #Type channel input
+        type_channel = F.one_hot(room_type, num_classes=self.num_room_types).float()    # (B, T)
+        type_channel = type_channel.unsqueeze(-1).unsqueeze(-1)                         # (B, T, 1, 1)
+        type_channel = type_channel.expand(-1, -1, x.shape[2], x.shape[3])            # (B, T, H, W)
+
+        #input type channel
+        x = torch.cat([x, type_channel], dim=1)
 
         # Down
         x1 = self.b1(x, combined_emb)
@@ -93,7 +104,6 @@ class SimpleUNet(nn.Module):
             x3 = F.interpolate(x3, size=x1.shape[2:])
 
         x3 = torch.cat([x3, x1], dim=1)
-
         x3 = self.b3(x3, combined_emb)
 
         return self.out(x3)
@@ -144,6 +154,55 @@ def compute_channel_weights(dataset):
     print("Channel weights:", weights)
     return weights
 
+def compute_type_loss(probs, room_type):
+    """
+    probs: (B, C, H, W) after softmax
+    room_type: (B,)
+    """
+    B = probs.size(0)
+
+    WALL, FLOOR, DOOR, ENEMY, CHEST, HEAL = range(6)
+
+    loss = 0.0
+
+    for i in range(B):
+        t = room_type[i]
+
+        enemy_amt = probs[i, ENEMY].mean()
+        chest_amt = probs[i, CHEST].mean()
+        heal_amt  = probs[i, HEAL].mean()
+
+        # Adjust how strong the entities are (higher = more rigid)
+        if t == "healing":
+            loss += enemy_amt * 2.0
+            loss += chest_amt * 1.0
+
+        elif t == "enemy":
+            loss += heal_amt * 2.0
+            loss += chest_amt * 0.5
+
+        elif t == "loot":
+            loss += enemy_amt * 0.5
+            loss += heal_amt * 2.0
+
+    return loss / B
+
+def compute_type_distributions(X, room_types, num_types):
+    """
+    X: (N, C, H, W)
+    room_types: (N,)
+    returns: (T, C)
+    """
+    T, C = num_types, X.size(1)     # type and tile channels
+    dists = torch.zeros(T, C, device=X.device)
+
+    for t in range(T):
+        mask = (room_types == t)
+        if mask.any():
+            dists[t] = X[mask].mean(dim=(0,2,3))
+
+    return dists
+
 def create_diffusion_structure_mask(x):
     # x: (B, C, H, W)
 
@@ -161,6 +220,12 @@ def train_diffusion_model(model, dataloader, optimizer, alphas_cumprod, epochs =
     # weights = compute_channel_weights(dataloader.dataset.X).to(device)
     dataset_dist = dataloader.dataset.X.mean(dim=(0,2,3)).to(device)  # (C,)
 
+    type_dist = compute_type_distributions(
+        dataloader.dataset.X,
+        dataloader.dataset.y,
+        num_types=5
+    ).to(device)
+
     # Custom class weights for training
     class_weights = torch.tensor([
         1.0,  # wall
@@ -171,13 +236,18 @@ def train_diffusion_model(model, dataloader, optimizer, alphas_cumprod, epochs =
         1.2   # healing
     ]).to(device)
 
+    wall_epoch = []
+    enemy_epoch = []
+    chest_epoch = []
+    healing_epoch = []
+
     for epoch in range(epochs):
         total_loss = 0
 
         for x, room_type in dataloader:
             x = x.to(device)                      # (B, C, H, W)
             room_type = room_type.to(device)      # (B,)
-            target_dist = dataset_dist.unsqueeze(0).expand(x.size(0), -1) # expand to be same as input size 
+            data_dist = dataset_dist.unsqueeze(0).expand(x.size(0), -1) # expand to be same as input size 
 
             # Sample timestep
             t = torch.randint(0, len(alphas_cumprod), (x.size(0),), device=device)
@@ -198,7 +268,14 @@ def train_diffusion_model(model, dataloader, optimizer, alphas_cumprod, epochs =
             # Compute channel distribution per batch
             pred_dist = probs.mean(dim=(2,3))  # (B, C)
 
-            dist_loss = F.mse_loss(pred_dist, target_dist)
+            dist_loss = F.mse_loss(pred_dist, data_dist)
+
+            # Get type loss
+            type_loss = compute_type_loss(probs, room_type)
+
+            # Get type dist loss
+            target_type_dist = type_dist[room_type]  # (B, C)
+            type_dist_loss = F.mse_loss(pred_dist, target_type_dist)
 
             # Create structure mask to zero-out loss on selected tile channels
             structure_mask = create_diffusion_structure_mask(x)
@@ -206,13 +283,10 @@ def train_diffusion_model(model, dataloader, optimizer, alphas_cumprod, epochs =
 
             # Noise loss 
             noise_loss = ((predicted_noise - noise) ** 2) # element-wise loss
-
             noise_loss *= (1 - structure_mask)
-
             noise_loss *=  class_weights.view(1, -1, 1, 1)
 
             noise_loss = noise_loss.mean()
-
 
             # Wall channel consistency loss (lightly)
             wall_channel = 0
@@ -222,11 +296,13 @@ def train_diffusion_model(model, dataloader, optimizer, alphas_cumprod, epochs =
             wall_loss = F.mse_loss(wall_pred, wall_true)
 
             # Combine losses with a strength value
-            loss = noise_loss + 0.1 * dist_loss + 0.2 * wall_loss
-
-
-            # Average over batch and spatial dimensions 
-            # loss = loss.mean()
+            loss = (
+                noise_loss 
+                + 0.1 * dist_loss 
+                + 0.2 * wall_loss 
+                + 0.2 * type_loss 
+                + 0.2 * type_dist_loss
+            )
 
             # # Encourage entities enemies, chest, healing(To Discourage flip the sign to negative)
             # x[:, 3:] -= 0.4
@@ -243,15 +319,23 @@ def train_diffusion_model(model, dataloader, optimizer, alphas_cumprod, epochs =
 
             total_loss += loss.item()
 
+            wall_epoch.append(probs[:,0].mean().item())
+            enemy_epoch.append(probs[:,3].mean().item())
+            chest_epoch.append(probs[:,4].mean().item())
+            healing_epoch.append(probs[:,5].mean().item())
+
         # -----------------
         # Save model every 10 epochs
         # -----------------
         if epoch % 10 == 0 or epoch == epochs - 1:
             torch.save(model.state_dict(), DIFFUSION_PATH)
+            print(f"Saving Diffusion model to: {DIFFUSION_PATH}")
 
-            # Debug: Print mean values of wall channel and predicted noise for wall channel
-            print("Wall channel mean:", x[:,0].mean().item())
-            print("Pred wall mean:", predicted_noise[:,0].mean().item())
+            # Debug: Print probability mean values of selected channels
+            print("Wall prob mean:", np.mean(wall_epoch))
+            print("Enemy prob mean:", np.mean(enemy_epoch))
+            print("Chest prob mean:", np.mean(chest_epoch))
+            print("Heal prob mean:", np.mean(healing_epoch))
 
         print(f"Epoch {epoch+1}/{epochs} - Loss: {total_loss / len(dataloader):.4f}")
     
