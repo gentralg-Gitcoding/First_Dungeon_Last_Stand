@@ -175,9 +175,13 @@ def load_model(model_path, model_selection):
             model.load_state_dict(torch.load(hf_path, map_location=DEVICE))
             model.eval()
             return DiffusionWrapper(model)
-    elif model_selection == "Dataset":
+    elif model_selection == "Dataset":  # This is not a model, this is raw data
         if os.path.exists(model_path):
             model = load_json_dataset(model_path)  # Ensure dataset is loaded and cached
+            return SyntheticWrapper(model)
+        else:
+            git_path = "https://raw.githubusercontent.com/gentralg-Gitcoding/First_Dungeon_Last_Stand/refs/heads/main/game/app/synthetic_rooms_dataset.json"
+            model = load_json_dataset(git_path)
             return SyntheticWrapper(model)
 
 def tile_distribution(room):
