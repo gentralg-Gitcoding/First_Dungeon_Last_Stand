@@ -5,7 +5,7 @@ import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
-from inference import CMAP, DIFFUSION_PATH, GAN_PATH, OG_ROOM, ROOM_TYPES, TILE_COLORS, load_model, post_process, tile_distribution
+from inference import CMAP, DIFFUSION_PATH, GAN_PATH, DATASET_PATH,OG_ROOM, ROOM_TYPES, TILE_COLORS, load_model, post_process, tile_distribution
 
 st.set_page_config(page_title="Dungeon Generator", layout="centered")
 
@@ -17,8 +17,10 @@ def get_model(model_selection):
         return load_model(GAN_PATH, model_selection)
     elif model_selection == "Diffusion":
         return load_model(DIFFUSION_PATH, model_selection)
+    elif model_selection == "Dataset":
+        return load_model(DATASET_PATH, model_selection)
 
-model_selection = st.selectbox("Model:", options=["Gans", "Diffusion"])
+model_selection = st.selectbox("Model:", options=["Gans", "Diffusion", "Dataset"])
 
 model = get_model(model_selection)
 
@@ -32,7 +34,10 @@ if st.button("Generate Room"):
     if model_selection == "Gans":
         st.session_state.room = model.generate(room_type_selection)
         st.session_state.post_room = post_process(model.generate(room_type_selection), room_type_selection)
-    else:
+    elif model_selection == "Diffusion":
+        st.session_state.room = model.generate(room_type_selection)
+        st.session_state.post_room = post_process(model.generate(room_type_selection), room_type_selection)
+    elif model_selection == "Dataset":
         st.session_state.room = model.generate(room_type_selection)
         st.session_state.post_room = post_process(model.generate(room_type_selection), room_type_selection)
 

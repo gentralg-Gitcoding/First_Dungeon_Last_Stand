@@ -1,4 +1,6 @@
+import copy
 import os
+import random
 
 import torch
 import numpy as np
@@ -8,6 +10,7 @@ from engine.map_generator import (
     Room, clean_generated_doors, create_structure_mask, enforce_entity_limits, 
     enforce_reachable_door, enforce_room_type_bias, get_noise_schedule, remove_trapped_enemies
 )
+from utils.save_load_data import load_json_dataset
 from settings import MATRIX_TO_ROOM_TILE, ROOM_HEIGHT, ROOM_WIDTH, ROOM_TYPES
 import matplotlib.colors as mcolors
 from huggingface_hub import hf_hub_download
@@ -17,6 +20,7 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 LATENT_DIM = 100  # match training
 GAN_PATH = "game/data/models/generator_epoch_49.pth"
 DIFFUSION_PATH = "game/data/models/diffusion_model.pth"
+DATASET_PATH = 'game/data/synthetic_rooms_dataset.json'
 OG_ROOM = Room(0, 0, ROOM_WIDTH, ROOM_HEIGHT).room_map
 
 # Tile mapping 
@@ -126,6 +130,20 @@ class DiffusionWrapper:
 
         return tiles.squeeze(0).cpu().numpy()
 
+class SyntheticWrapper:
+    def __init__(self, dataset):
+        self.dataset = dataset
+
+    def generate(self, room_type_str="start"):
+        room = Room(0, 0, ROOM_WIDTH, ROOM_HEIGHT)
+        #Copy the dataset, DO NOT MODIFY THE DATA
+        filtered_dataset = [x for x in copy.deepcopy(self.dataset) if x["type"] == room_type_str]
+        dataset_copy = random.choice(filtered_dataset)
+        room.room_map, room.type = dict.values(dataset_copy)
+        print(f'\nSynth Room: {list(dataset_copy)[0]}')
+        print(f'Room type: {room.type}')
+        return room.room_map
+
 def load_model(model_path, model_selection):
     if model_selection == "Gans":
         model = Generator().to(DEVICE)
@@ -157,6 +175,10 @@ def load_model(model_path, model_selection):
             model.load_state_dict(torch.load(hf_path, map_location=DEVICE))
             model.eval()
             return DiffusionWrapper(model)
+    elif model_selection == "Dataset":
+        if os.path.exists(model_path):
+            model = load_json_dataset(model_path)  # Ensure dataset is loaded and cached
+            return SyntheticWrapper(model)
 
 def tile_distribution(room):
     unique, counts = np.unique(room, return_counts=True)

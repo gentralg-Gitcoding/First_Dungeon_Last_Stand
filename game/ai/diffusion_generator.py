@@ -88,7 +88,7 @@ class SimpleUNet(nn.Module):
         type_channel = type_channel.unsqueeze(-1).unsqueeze(-1)                         # (B, T, 1, 1)
         type_channel = type_channel.expand(-1, -1, x.shape[2], x.shape[3])            # (B, T, H, W)
 
-        #input type channel
+        #input with type channel
         x = torch.cat([x, type_channel], dim=1)
 
         # Down
@@ -99,11 +99,11 @@ class SimpleUNet(nn.Module):
         # Up
         x3 = self.up1(x2)
 
-        # Match size if needed (should be 16x16 after upsampling, but just in case)
+        # Match room size if needed (should be 16x16 after upsampling, but just in case)
         if x3.shape != x1.shape:
             x3 = F.interpolate(x3, size=x1.shape[2:])
 
-        x3 = torch.cat([x3, x1], dim=1)
+        x3 = torch.cat([x3, x1], dim=1) # Skip connection
         x3 = self.b3(x3, combined_emb)
 
         return self.out(x3)
