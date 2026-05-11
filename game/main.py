@@ -1,18 +1,12 @@
 import pygame
 
 #User files
-from settings import  SCREEN_WIDTH, SCREEN_HEIGHT, TILE_SIZE, FPS, ROOM_WIDTH, ROOM_HEIGHT
+from engine.entity_system import Player
+from utils.sprite_sheet_selection import get_img_frame_surface
+from settings import  ROOM_TILE_DICT, SCREEN_WIDTH, SCREEN_HEIGHT, TILE_SIZE, FPS, ROOM_WIDTH, ROOM_HEIGHT
 from utils.load_and_scale import load_and_scale, load_img
 from engine.map_generator import generate_dungeon_room
 
-
-
-WALL = 'WALL'
-FLOOR = 'FLOOR'
-DOOR = 'DOOR'
-ENEMY = 'ENEMY'
-CHEST = 'CHEST'
-HEALING = 'HEALING'
 
 pygame.init()
 
@@ -44,9 +38,40 @@ fountain_img.set_colorkey((255, 0, 255, 255))
 # Load player sprite asset
 player_img = load_img("game/assets/players/Males/M_06.png", "player")
 
+
+# TODO: Create a function that can take in any sprite sheet and frame dimensions to return the correct frame as a surface. Currently hardcoded for player and door sprite sheets.
+# Possibly use a class to represent sprite sheets and their frames for better organization and reusability.
+# Get Player frame from player sprite sheet
+# 64px by 51px with 4 by 3 frames
+player_frame_width = 16
+player_frame_height = 17
+player_frame = pygame.Rect(
+    0 * player_frame_width,     #0, 0 is top-left frame
+    0 * player_frame_height, 
+    player_frame_width, 
+    player_frame_height
+)     
+
+#Resize the character to be a tile size
+player_surface = get_img_frame_surface(player_img, player_frame)
+
 #Load door sprite asset 
 door_img = load_img('game/assets/doors.png', 'doors')
 door_img.set_colorkey((255, 255, 255, 0))
+
+# Get door frame from door sprite sheet
+# 512px by 512px with 8 by 8 frames
+door_frame_width = 64
+door_frame_height = 64
+door_frame = pygame.Rect(
+    0 * door_frame_width, 
+    4 * door_frame_height, 
+    door_frame_width, 
+    door_frame_height
+)
+
+#Resize the door to be a tile size
+door_surface = get_img_frame_surface(door_img, door_frame)
 
 clock = pygame.time.Clock()
 running = True
@@ -68,7 +93,8 @@ world_map[room_pos] = {
 }
 
 #Place the player in the center of the first room
-player_x, player_y = room.center()
+center_x, center_y = room.center()
+player = Player(center_x, center_y, player_img)
 
 #Get the direction of the door the player moves in
 def get_direction(px, py):
@@ -127,13 +153,12 @@ def move_rooms(room_pos, direction):
 def check_door_transition(player_x, player_y, room_map=room.room_map):
     px, py = player_x, player_y
 
-    if room_map[py][px] == DOOR:
+    if room_map[py][px] == ROOM_TILE_DICT['DOOR']:
         return True
 
     return False
 
-def handle_room_transition():
-    global room_pos, direction, room, player_x, player_y
+def handle_room_transition(player_x, player_y, room_pos, direction, room=room):
 
     #Check which way the player went
     direction = get_direction(player_x, player_y)
@@ -165,6 +190,8 @@ def handle_room_transition():
     # reposition player depending on door used
     player_x, player_y = set_player_position(direction)
 
+    return player_x, player_y, room_pos, direction, room
+
 while running:
 
     #Set Events
@@ -173,8 +200,8 @@ while running:
             running = False
 
         if event.type == pygame.KEYDOWN:
-            new_x = player_x
-            new_y = player_y
+            new_x = player.x
+            new_y = player.y
 
             #Setup movement keys (W,A,S,D)
             if event.key == pygame.K_w:
@@ -190,16 +217,15 @@ while running:
             if (
                 0 <= new_x < len(room.room_map[0]) and
                 0 <= new_y < len(room.room_map) and
-                room.room_map[new_y][new_x] != WALL
+                room.room_map[new_y][new_x] != ROOM_TILE_DICT['WALL']
             ):
-                # print(player_x, player_y)
-                player_x = new_x
-                player_y = new_y
+                player.x = new_x
+                player.y = new_y
 
             #Check if player transitioned rooms
-            if check_door_transition(player_x, player_y, room.room_map):
+            if check_door_transition(player.x, player.y, room.room_map):
 
-                handle_room_transition()
+                player.x, player.y, room_pos, direction, room = handle_room_transition(player.x, player.y, room_pos, direction, room)
 
 
 
@@ -223,47 +249,34 @@ while running:
     # fill the screen to wipe away anything from last frame
     screen.fill("black")
 
-    # Get door frame from door sprite sheet
-    # 512px by 512px with 8 by 8 frames
-    door_frame_width = 64
-    door_frame_height = 64
-    door_frame = pygame.Rect(
-        0 * door_frame_width, 
-        4 * door_frame_height, 
-        door_frame_width, 
-        door_frame_height
-    )
-
-    #Resize the door to be a tile size
-    door_surface = door_img.subsurface(door_frame).copy()
-    door_surface = pygame.transform.scale(door_surface, (TILE_SIZE, TILE_SIZE))
-
     # -------------
     # Draw Dungeon Tiles
     # -------------
     for y, row in enumerate(room.room_map):
         for x, tile in enumerate(row):
-            if tile == WALL:
+            if tile == ROOM_TILE_DICT['WALL']:
                 #Draws the png for the walls
                 screen.blit(wall_img, (x * TILE_SIZE, y * TILE_SIZE))
-            elif tile == FLOOR:
+            elif tile == ROOM_TILE_DICT['FLOOR']:
                 #Draws the png for the floors
                 screen.blit(floor_img, (x * TILE_SIZE, y * TILE_SIZE))
-            elif tile == DOOR:
+            elif tile == ROOM_TILE_DICT['DOOR']:
                 screen.blit(door_surface, (x * TILE_SIZE, y * TILE_SIZE))
-            elif tile == ENEMY:
+            # TODO: Refactor to use Entity system instead of hardcoding tile types here. 
+            # Would allow for more dynamic interactions and behaviors for different tile types (enemies, loot, healing, etc.) instead of just rendering a static image.
+            elif tile == ROOM_TILE_DICT['ENEMY']:
                 screen.blits((
                     (floor_img, (x * TILE_SIZE, y * TILE_SIZE)),
                     (bat_grey_img, (x * TILE_SIZE, y * TILE_SIZE))
                     )
                 )
-            elif tile == CHEST:
+            elif tile == ROOM_TILE_DICT['CHEST']:
                 screen.blits((
                     (floor_img, (x * TILE_SIZE, y * TILE_SIZE)),
                     (chest_1_img, (x * TILE_SIZE, y * TILE_SIZE))
                     )
                 )
-            elif tile == HEALING:
+            elif tile == ROOM_TILE_DICT['HEALING']:
                 screen.blits((
                     (floor_img, (x * TILE_SIZE, y * TILE_SIZE)),
                     (fountain_img, (x * TILE_SIZE, y * TILE_SIZE))
@@ -292,18 +305,8 @@ while running:
         5
     )
 
-    # Get Player frame from player sprite sheet
-    # 64px by 51px with 4 by 3 frames
-    frame_width = 16
-    frame_height = 17
-    player_frame = pygame.Rect(0 * frame_width, 0 * frame_height, frame_width, frame_height)     #0, 0 is top-left frame
-
-    #Resize the character to be a tile size
-    player_surface = player_img.subsurface(player_frame).copy()
-    player_surface = pygame.transform.scale(player_surface, (TILE_SIZE, TILE_SIZE))
-
     #Draw Player tile
-    screen.blit(player_surface, (player_x * TILE_SIZE, player_y * TILE_SIZE))
+    screen.blit(player_surface, (player.x * TILE_SIZE, player.y * TILE_SIZE))
 
     #Updates the full display surface to the screen
     pygame.display.flip()

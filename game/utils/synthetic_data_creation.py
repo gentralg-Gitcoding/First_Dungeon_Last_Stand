@@ -5,7 +5,7 @@ import random
 from collections import deque
 
 #User files
-from engine.map_generator import Room, assign_room_type, extract_room_matrix, enforce_reachable_door
+from engine.map_generator import Room, assign_room_type, enforce_reachable_door
 from settings import ROOM_TILE_DICT, ROOM_WIDTH, ROOM_HEIGHT
 
 

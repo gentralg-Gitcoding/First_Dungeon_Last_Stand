@@ -351,10 +351,10 @@ def train_diffusion_model(model, dataloader, optimizer, alphas_cumprod, epochs =
     
 
 
-def generate_diffusion_dungeon_room(model, room_type, room_matrix, mask, alphas_cumprod, device):
+def generate_diffusion_dungeon_room(model, room_type, room, mask, alphas_cumprod, device):
     model.eval()
     # Convert room matrix to tensor
-    room_tensor = room_to_tensor(room_matrix)       # (C, H, W)
+    room_tensor = room_to_tensor(room.room_map)       # (C, H, W)
     room_tensor = torch.tensor(room_tensor, dtype=torch.float32).unsqueeze(0).to(device)    # (1, C, H, W)
     # Convert room_tensor to hard labels
     room_labels = torch.argmax(room_tensor, dim=1, keepdim=True)  # (1,1,H,W)
