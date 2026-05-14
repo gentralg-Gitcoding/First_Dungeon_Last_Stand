@@ -192,6 +192,13 @@ def handle_room_transition(player_x, player_y, room_pos, direction, room=room):
 
     return player_x, player_y, room_pos, direction, room
 
+def attempt_move(entity, dx, dy, room):
+    target_x = entity.x + dx
+    target_y = entity.y + dy
+
+    if not room.is_blocked(target_x, target_y):
+        entity.move(dx, dy) 
+
 while running:
 
     #Set Events
@@ -214,13 +221,15 @@ while running:
                 new_x += 1
 
             #Setup wall blocking (ORDER MATTERS!)
-            if (
-                0 <= new_x < len(room.room_map[0]) and
-                0 <= new_y < len(room.room_map) and
-                room.room_map[new_y][new_x] != ROOM_TILE_DICT['WALL']
-            ):
-                player.x = new_x
-                player.y = new_y
+            # if (
+            #     0 <= new_x < len(room.room_map[0]) and
+            #     0 <= new_y < len(room.room_map) and
+            #     room.room_map[new_y][new_x] != ROOM_TILE_DICT['WALL']
+            # ):
+            #     player.x = new_x
+            #     player.y = new_y
+
+            attempt_move(player, new_x - player.x, new_y - player.y, room)
 
             #Check if player transitioned rooms
             if check_door_transition(player.x, player.y, room.room_map):

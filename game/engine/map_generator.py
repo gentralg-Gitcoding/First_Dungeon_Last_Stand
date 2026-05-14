@@ -124,6 +124,38 @@ class Room:
 
         return doors
 
+    def get_entity_at(self, x, y, exclude=None):
+        for entity in self.entities:
+            if entity == exclude:
+                continue
+
+            if entity.x == x and entity.y == y:
+                return entity
+
+        return None
+
+    def tile_blocks_movement(self, x, y):
+        tile = self.room_map[y][x]
+        return tile == ROOM_TILE_DICT["WALL"]
+
+    def entity_blocks_movement(self, x, y):
+        entity = self.get_entity_at(x, y)
+        if entity:
+            return entity.blocks_movement
+
+        return False
+    
+    def is_within_bounds(self, x, y):
+        return 0 <= x < self.w and 0 <= y < self.h
+
+    def is_blocked(self, x, y):
+        '''Check if tile or entity blocks movement'''
+        return (
+            self.tile_blocks_movement(x, y)
+            or self.entity_blocks_movement(x, y)
+            or self.is_within_bounds(x, y) == False
+        )
+
 
 def assign_room_type(room):
     global rooms
