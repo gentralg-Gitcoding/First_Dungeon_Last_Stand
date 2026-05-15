@@ -8,6 +8,7 @@ import numpy as np
 from ai.gan_generator import Generator, generate_room
 from ai.diffusion_generator import SimpleUNet, generate_diffusion_dungeon_room
 from engine.entity_system import Chest, Enemy, HealingFountain
+from utils.load_and_scale import load_and_scale
 from utils.data_to_dataloader_converter import get_dataloader
 from settings import ROOM_HEIGHT, ROOM_WIDTH, MAX_ROOMS, ROOM_TILE_DICT, ROOM_TYPES
 from utils.save_load_data import load_json_dataset
@@ -151,9 +152,9 @@ class Room:
     def is_blocked(self, x, y):
         '''Check if tile or entity blocks movement'''
         return (
-            self.tile_blocks_movement(x, y)
+            self.is_within_bounds(x, y) == False
+            or self.tile_blocks_movement(x, y)
             or self.entity_blocks_movement(x, y)
-            or self.is_within_bounds(x, y) == False
         )
 
 
@@ -443,11 +444,11 @@ def enforce_entity_limits(room, room_type):
             for y, x in floor_positions[:(min_limit - count)]:
                 matrix[y][x] = tile_type
                 if tile_type == ROOM_TILE_DICT['ENEMY']:
-                    entities.append(Enemy(x, y))
+                    entities.append(Enemy(x, y, None))
                 elif tile_type == ROOM_TILE_DICT['CHEST']:
-                    entities.append(Chest(x, y))
+                    entities.append(Chest(x, y, None))
                 elif tile_type == ROOM_TILE_DICT['HEALING']:
-                    entities.append(HealingFountain(x, y))
+                    entities.append(HealingFountain(x, y, None))
                 added_count += 1
 
 

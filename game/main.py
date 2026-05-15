@@ -80,7 +80,6 @@ dt = 0
 #Create world's starting zone 
 world_map = {}
 room_pos = (0, 0)
-# direction = ''
 
 #Create first room on app start
 room = generate_dungeon_room()
@@ -97,20 +96,20 @@ center_x, center_y = room.center()
 player = Player(center_x, center_y, player_img)
 
 #Get the direction of the door the player moves in
-def get_direction(px, py):
-    if(px == ROOM_WIDTH - 1 and py == ROOM_HEIGHT // 2):
+def get_direction(dx, dy):
+    if(dx == 1 and dy == 0):
         #Player exits right
         return 'right' 
 
-    elif(px == ROOM_WIDTH // 2 and py == 0):
+    elif(dx == 0 and dy == -1):
         #Player exits top
         return  'top'
 
-    elif(px == 0 and py == ROOM_HEIGHT // 2):
+    elif(dx == -1 and dy == 0):
         #Player exits left
         return 'left'
 
-    elif(px == ROOM_WIDTH // 2 and py == ROOM_HEIGHT - 1):
+    elif(dx == 0 and dy == 1):
         #Player exits bottom
         return 'bottom'
 
@@ -158,20 +157,17 @@ def check_door_transition(target_x, target_y, room_map=room.room_map):
 
     return False
 
-def handle_room_transition(player_x, player_y, room_pos, room=room):
+def handle_room_transition(player_position, transition_direction, room_pos, room=room):
 
     # Delay player movement for a short time to prevent multiple room transitions from one key press due to the player still being on the door tile for multiple frames. 
     # This is a temporary solution until we implement seamless movement and better input handling.
-    player.transition_cooldown = pygame.time.get_ticks() + 250
+    player.transition_cooldown = pygame.time.get_ticks() + 500
 
 
-    #Check which way the player went
-    direction = get_direction(player_x, player_y)
+    if not transition_direction:
+        return player_position, room_pos, room
 
-    if not direction:
-        return player_x, player_y, room_pos, room
-
-    new_pos = move_rooms(room_pos, direction)
+    new_pos = move_rooms(room_pos, transition_direction)
 
     if new_pos in world_map:
         # Room already exists
@@ -193,20 +189,25 @@ def handle_room_transition(player_x, player_y, room_pos, room=room):
     room_pos = new_pos
 
     # reposition player depending on door used
-    player_x, player_y = set_player_position(direction)
+    player_position = set_player_position(transition_direction)
 
-    return player_x, player_y, room_pos, room
+    return player_position, room_pos, room 
 
 def attempt_move(entity, dx, dy, room, room_pos):
     target_x = entity.x + dx
     target_y = entity.y + dy
 
+    #Check which way the player went
+    transition_direction = get_direction(dx, dy)
+
     #Check if target is a door and if so, handle room transition
     if room.room_map[target_y][target_x] == ROOM_TILE_DICT['DOOR']:
-        entity.x, entity.y, room_pos, room = handle_room_transition(target_x, target_y, room_pos, room)
+        (entity.x, entity.y), room_pos, room = handle_room_transition(entity.position, transition_direction, room_pos, room)
         return entity.x, entity.y, room_pos, room
     elif not room.is_blocked(target_x, target_y):
         entity.move(dx, dy)
+        return entity.x, entity.y, room_pos, room
+    else:
         return entity.x, entity.y, room_pos, room
 
 while running:
@@ -240,40 +241,33 @@ while running:
 
         #Continous movement handling for when keys are held down
         current_time = pygame.time.get_ticks()
+        dx = 0
+        dy = 0
 
         if current_time - player.last_move_time > MOVE_DELAY and current_time > player.transition_cooldown:
             keys = pygame.key.get_pressed()
-            new_x = player.x
-            new_y = player.y
 
             if keys[pygame.K_w]:
-                # new_y -= 300 * dt
-                new_y -= 1
-            if keys[pygame.K_s]:
-                # new_y += 300 * dt
-                new_y += 1
-            if keys[pygame.K_a]:
-                # new_x -= 300 * dt
-                new_x -= 1
-            if keys[pygame.K_d]:
-                # new_x += 300 * dt
-                new_x += 1
+                dy = -1
+                player.facing = "up"
+            elif keys[pygame.K_s]:
+                dy = 1
+                player.facing = "down"
+            elif keys[pygame.K_a]:
+                dx = -1
+                player.facing = "left"
+            elif keys[pygame.K_d]:
+                dx = 1
+                player.facing = "right"
 
-
+            
+            if (dx, dy) != (0, 0):
+                player.x, player.y, room_pos, room = attempt_move(player, dx, dy, room, room_pos)
+                player.last_move_time = current_time
 
 
 
     #Update Section
-    if (new_x, new_y) != (player.x, player.y):
-        player.x, player.y, room_pos, room = attempt_move(player, new_x - player.x, new_y - player.y, room, room_pos)
-        player.last_move_time = current_time
-
-        #Check if player transitioned rooms
-        # if check_door_transition(player.x, player.y, room.room_map):
-
-        #     player.x, player.y, room_pos, room = handle_room_transition(player.x, player.y, room_pos, room)
-
-
 
 
 

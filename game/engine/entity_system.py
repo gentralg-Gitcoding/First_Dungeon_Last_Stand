@@ -65,6 +65,7 @@ class Player(Entity):
         self.attack = 10
         self.last_move_time = 0
         self.transition_cooldown = 0
+        self.facing = "down"
 
 
 class Enemy(Entity):
