@@ -63,6 +63,8 @@ class Player(Entity):
 
         self.hp = 100
         self.attack = 10
+        self.last_move_time = 0
+        self.transition_cooldown = 0
 
 
 class Enemy(Entity):

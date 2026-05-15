@@ -3,7 +3,7 @@ import pygame
 #User files
 from engine.entity_system import Player
 from utils.sprite_sheet_selection import get_img_frame_surface
-from settings import  ROOM_TILE_DICT, SCREEN_WIDTH, SCREEN_HEIGHT, TILE_SIZE, FPS, ROOM_WIDTH, ROOM_HEIGHT
+from settings import  MOVE_DELAY, ROOM_TILE_DICT, SCREEN_WIDTH, SCREEN_HEIGHT, TILE_SIZE, FPS, ROOM_WIDTH, ROOM_HEIGHT
 from utils.load_and_scale import load_and_scale, load_img
 from engine.map_generator import generate_dungeon_room
 
@@ -80,7 +80,7 @@ dt = 0
 #Create world's starting zone 
 world_map = {}
 room_pos = (0, 0)
-direction = ''
+# direction = ''
 
 #Create first room on app start
 room = generate_dungeon_room()
@@ -150,21 +150,26 @@ def move_rooms(room_pos, direction):
 # TODO: Create a trackable vector for seamless movements when a key is held down 
 # player_pos = pygame.Vector2(player_x * TILE_SIZE, player_y * TILE_SIZE)
 
-def check_door_transition(player_x, player_y, room_map=room.room_map):
-    px, py = player_x, player_y
+def check_door_transition(target_x, target_y, room_map=room.room_map):
+    px, py = target_x, target_y
 
     if room_map[py][px] == ROOM_TILE_DICT['DOOR']:
         return True
 
     return False
 
-def handle_room_transition(player_x, player_y, room_pos, direction, room=room):
+def handle_room_transition(player_x, player_y, room_pos, room=room):
+
+    # Delay player movement for a short time to prevent multiple room transitions from one key press due to the player still being on the door tile for multiple frames. 
+    # This is a temporary solution until we implement seamless movement and better input handling.
+    player.transition_cooldown = pygame.time.get_ticks() + 250
+
 
     #Check which way the player went
     direction = get_direction(player_x, player_y)
 
     if not direction:
-        return player_x, player_y
+        return player_x, player_y, room_pos, room
 
     new_pos = move_rooms(room_pos, direction)
 
@@ -190,66 +195,85 @@ def handle_room_transition(player_x, player_y, room_pos, direction, room=room):
     # reposition player depending on door used
     player_x, player_y = set_player_position(direction)
 
-    return player_x, player_y, room_pos, direction, room
+    return player_x, player_y, room_pos, room
 
-def attempt_move(entity, dx, dy, room):
+def attempt_move(entity, dx, dy, room, room_pos):
     target_x = entity.x + dx
     target_y = entity.y + dy
 
-    if not room.is_blocked(target_x, target_y):
-        entity.move(dx, dy) 
+    #Check if target is a door and if so, handle room transition
+    if room.room_map[target_y][target_x] == ROOM_TILE_DICT['DOOR']:
+        entity.x, entity.y, room_pos, room = handle_room_transition(target_x, target_y, room_pos, room)
+        return entity.x, entity.y, room_pos, room
+    elif not room.is_blocked(target_x, target_y):
+        entity.move(dx, dy)
+        return entity.x, entity.y, room_pos, room
 
 while running:
 
-    #Set Events
+    #Handle Inputs 
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
 
-        if event.type == pygame.KEYDOWN:
+        # if event.type == pygame.KEYDOWN:
+        #     new_x = player.x
+        #     new_y = player.y
+
+        #     #Setup movement keys (W,A,S,D)
+        #     if event.key == pygame.K_w:
+        #         new_y -= 1
+        #     if event.key == pygame.K_s:
+        #         new_y += 1
+        #     if event.key == pygame.K_a:
+        #         new_x -= 1
+        #     if event.key == pygame.K_d:
+        #         new_x += 1
+
+        #     attempt_move(player, new_x - player.x, new_y - player.y, room)
+
+        #     #Check if player transitioned rooms
+        #     if check_door_transition(player.x, player.y, room.room_map):
+
+        #         player.x, player.y, room_pos, direction, room = handle_room_transition(player.x, player.y, room_pos, direction, room)
+
+
+        #Continous movement handling for when keys are held down
+        current_time = pygame.time.get_ticks()
+
+        if current_time - player.last_move_time > MOVE_DELAY and current_time > player.transition_cooldown:
+            keys = pygame.key.get_pressed()
             new_x = player.x
             new_y = player.y
 
-            #Setup movement keys (W,A,S,D)
-            if event.key == pygame.K_w:
+            if keys[pygame.K_w]:
+                # new_y -= 300 * dt
                 new_y -= 1
-            if event.key == pygame.K_s:
+            if keys[pygame.K_s]:
+                # new_y += 300 * dt
                 new_y += 1
-            if event.key == pygame.K_a:
+            if keys[pygame.K_a]:
+                # new_x -= 300 * dt
                 new_x -= 1
-            if event.key == pygame.K_d:
+            if keys[pygame.K_d]:
+                # new_x += 300 * dt
                 new_x += 1
 
-            #Setup wall blocking (ORDER MATTERS!)
-            # if (
-            #     0 <= new_x < len(room.room_map[0]) and
-            #     0 <= new_y < len(room.room_map) and
-            #     room.room_map[new_y][new_x] != ROOM_TILE_DICT['WALL']
-            # ):
-            #     player.x = new_x
-            #     player.y = new_y
-
-            attempt_move(player, new_x - player.x, new_y - player.y, room)
-
-            #Check if player transitioned rooms
-            if check_door_transition(player.x, player.y, room.room_map):
-
-                player.x, player.y, room_pos, direction, room = handle_room_transition(player.x, player.y, room_pos, direction, room)
 
 
-
-    # keys = pygame.key.get_pressed()
-    # if keys[pygame.K_w]:
-    #     player_pos.y -= 300 * dt
-    # if keys[pygame.K_s]:
-    #     player_pos.y += 300 * dt
-    # if keys[pygame.K_a]:
-    #     player_pos.x -= 300 * dt
-    # if keys[pygame.K_d]:
-    #     player_pos.x += 300 * dt
 
 
     #Update Section
+    if (new_x, new_y) != (player.x, player.y):
+        player.x, player.y, room_pos, room = attempt_move(player, new_x - player.x, new_y - player.y, room, room_pos)
+        player.last_move_time = current_time
+
+        #Check if player transitioned rooms
+        # if check_door_transition(player.x, player.y, room.room_map):
+
+        #     player.x, player.y, room_pos, room = handle_room_transition(player.x, player.y, room_pos, room)
+
+
 
 
 
@@ -321,6 +345,6 @@ while running:
     pygame.display.flip()
 
     #limits FPS to 60
-    clock.tick(FPS)
-    # dt = clock.tick(60) / 1000
+    # clock.tick(FPS)
+    dt = clock.tick(FPS) / 1000
 pygame.quit()
