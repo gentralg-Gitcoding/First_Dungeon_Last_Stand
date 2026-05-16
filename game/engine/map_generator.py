@@ -7,7 +7,7 @@ from huggingface_hub import hf_hub_download
 import numpy as np
 from ai.gan_generator import Generator, generate_room
 from ai.diffusion_generator import SimpleUNet, generate_diffusion_dungeon_room
-from engine.entity_system import Chest, Enemy, HealingFountain
+from engine.entity_system import Chest, Enemy, Entity, HealingFountain
 from utils.load_and_scale import load_and_scale
 from utils.data_to_dataloader_converter import get_dataloader
 from settings import ROOM_HEIGHT, ROOM_WIDTH, MAX_ROOMS, ROOM_TILE_DICT, ROOM_TYPES
@@ -89,7 +89,7 @@ class Room:
 
         self.doors = self.place_doors(self.room_map)
 
-        self.entities = []
+        self.entities = list[Entity]()
 
     def center(self):
         return (self.x + self.w // 2, self.y + self.h // 2)
@@ -156,6 +156,11 @@ class Room:
             or self.tile_blocks_movement(x, y)
             or self.entity_blocks_movement(x, y)
         )
+
+    def remove_entity(self, entity):
+        if entity in self.entities:
+            self.entities.remove(entity)
+            self.room_map[entity.y][entity.x] = ROOM_TILE_DICT['FLOOR']  # Update tilemap to reflect entity removal
 
 
 def assign_room_type(room):

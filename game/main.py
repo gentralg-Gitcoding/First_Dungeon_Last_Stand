@@ -1,9 +1,9 @@
 import pygame
 
 #User files
-from engine.entity_system import Player
+from engine.entity_system import Enemy, Player
 from utils.sprite_sheet_selection import get_img_frame_surface
-from settings import  MOVE_DELAY, ROOM_TILE_DICT, SCREEN_WIDTH, SCREEN_HEIGHT, TILE_SIZE, FPS, ROOM_WIDTH, ROOM_HEIGHT
+from settings import  DIRECTION_VECTORS, MOVE_DELAY, ROOM_TILE_DICT, SCREEN_WIDTH, SCREEN_HEIGHT, TILE_SIZE, FPS, ROOM_WIDTH, ROOM_HEIGHT
 from utils.load_and_scale import load_and_scale, load_img
 from engine.map_generator import generate_dungeon_room
 
@@ -95,27 +95,22 @@ world_map[room_pos] = {
 center_x, center_y = room.center()
 player = Player(center_x, center_y, player_img)
 
-#Get the direction of the door the player moves in
 def get_direction(dx, dy):
+    '''Get the direction the player moves in'''
     if(dx == 1 and dy == 0):
-        #Player exits right
         return 'right' 
 
     elif(dx == 0 and dy == -1):
-        #Player exits top
         return  'top'
 
     elif(dx == -1 and dy == 0):
-        #Player exits left
         return 'left'
 
     elif(dx == 0 and dy == 1):
-        #Player exits bottom
         return 'bottom'
 
-
-#Reposition player depending on door direction you move to
 def set_player_position(direction):
+    '''Reposition player depending on door direction you move towards when transitioning rooms'''
     if(direction == 'right'):
         #Player exits right
         return 1, ROOM_HEIGHT // 2
@@ -132,8 +127,8 @@ def set_player_position(direction):
         #Player exits bottom
         return ROOM_WIDTH // 2, 1
 
-#Updates the room in the world map the player moved to
 def move_rooms(room_pos, direction):
+    '''Updates the room in the world map the player moved to'''
     x, y = room_pos
 
     if direction == 'right':
@@ -145,11 +140,8 @@ def move_rooms(room_pos, direction):
     if direction == 'bottom':
         return (x, y + 1)
 
-
-# TODO: Create a trackable vector for seamless movements when a key is held down 
-# player_pos = pygame.Vector2(player_x * TILE_SIZE, player_y * TILE_SIZE)
-
 def check_door_transition(target_x, target_y, room_map=room.room_map):
+    '''Checks if player is on a door tile to transition rooms'''
     px, py = target_x, target_y
 
     if room_map[py][px] == ROOM_TILE_DICT['DOOR']:
@@ -158,10 +150,10 @@ def check_door_transition(target_x, target_y, room_map=room.room_map):
     return False
 
 def handle_room_transition(player_position, transition_direction, room_pos, room=room):
-
+    '''Handles player transitioning between rooms when stepping on a door tile'''
     # Delay player movement for a short time to prevent multiple room transitions from one key press due to the player still being on the door tile for multiple frames. 
     # This is a temporary solution until we implement seamless movement and better input handling.
-    player.transition_cooldown = pygame.time.get_ticks() + 500
+    player.transition_cooldown = pygame.time.get_ticks() + 250
 
 
     if not transition_direction:
@@ -194,6 +186,8 @@ def handle_room_transition(player_position, transition_direction, room_pos, room
     return player_position, room_pos, room 
 
 def attempt_move(entity, dx, dy, room, room_pos):
+    '''Movement check for player movement and room transitions. 
+    Checks if player is trying to move onto a door tile to transition rooms, or if the tile they are trying to move onto is blocked.'''
     target_x = entity.x + dx
     target_y = entity.y + dy
 
@@ -239,7 +233,9 @@ while running:
         #         player.x, player.y, room_pos, direction, room = handle_room_transition(player.x, player.y, room_pos, direction, room)
 
 
-        #Continous movement handling for when keys are held down
+        # ------------------------------------------
+        # Continous movement handling for when keys are held down
+        # -------------------------------------------
         current_time = pygame.time.get_ticks()
         dx = 0
         dy = 0
@@ -260,15 +256,56 @@ while running:
                 dx = 1
                 player.facing = "right"
 
-            
             if (dx, dy) != (0, 0):
                 player.x, player.y, room_pos, room = attempt_move(player, dx, dy, room, room_pos)
                 player.last_move_time = current_time
 
 
+        # ------------------------------------------
+        # Single key press handling for interactions and combat
+        # ------------------------------------------
+        if event.type == pygame.KEYDOWN:
+
+            # ------------------------------------------
+            # Interaction handling (E key)
+            # ------------------------------------------
+            if event.key == pygame.K_e:
+                facing_dx, facing_dy = DIRECTION_VECTORS[player.facing]
+
+                facing_target_x = player.x + facing_dx
+                facing_target_y = player.y + facing_dy
+
+                target_entity = room.get_entity_at(facing_target_x, facing_target_y)
+
+                if target_entity:
+                    target_entity.interact(player, room)
+
+
+        # ------------------------------------------
+        # Combat handling (MouseButton Down key)
+        # ------------------------------------------
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            facing_dx, facing_dy = DIRECTION_VECTORS[player.facing]
+
+            facing_target_x = player.x + facing_dx
+            facing_target_y = player.y + facing_dy
+
+            target_entity = room.get_entity_at(facing_target_x, facing_target_y)
+
+            if isinstance(target_entity, Enemy):
+                target_entity.hp -= player.attack
+                print(f'Attacked enemy! Enemy HP: {target_entity.hp}')
+
+                if target_entity.hp <= 0:
+                    print('Enemy defeated!')
+                    room.remove_entity(target_entity)
+
 
     #Update Section
 
+    # -------------
+    # Update entities in the room (enemies, chests, healing fountains, etc.)
+    # -------------
 
 
     #Draw Section
