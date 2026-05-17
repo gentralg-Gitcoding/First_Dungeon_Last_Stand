@@ -65,8 +65,10 @@ class Player(Entity):
 
         self.hp = 100
         self.attack = 10
-        self.move_delay = 100
+        self.attack_speed = 500
+        self.move_delay = 200
         self.last_move_time = 0
+        self.last_attack_time = 0
         self.transition_cooldown = 0
         self.facing = "down"
 
@@ -85,9 +87,11 @@ class Enemy(Entity):
         self.hp = 20
         self.attack = 5
         self.attack_speed = 2000
+        self.init_attack_delay = 200    #delay before enemy can attack after switching to attack state for dodging purposes
 
-        self.move_delay = 1000
+        self.move_speed = 1000
         self.last_move_time = 0
+        self.last_attack_time = 0
 
         self.aggro_range = 5
 
@@ -123,12 +127,12 @@ class Enemy(Entity):
             self.state = "idle"
 
         if self.state == "attack":
-            if current_time - self.last_move_time >= self.attack_speed:
+            if current_time - self.last_attack_time >= self.attack_speed and current_time - self.last_move_time >= self.init_attack_delay:
                 player.hp -= self.attack
                 print(f"Enemy attacks! Player HP: {player.hp}")
-                self.last_move_time = current_time
+                self.last_attack_time = current_time
         elif self.state == "chase":
-            if current_time - self.last_move_time >= self.move_delay:
+            if current_time - self.last_move_time >= self.move_speed:
                 dx = 0
                 dy = 0
                 if player.x < self.x:

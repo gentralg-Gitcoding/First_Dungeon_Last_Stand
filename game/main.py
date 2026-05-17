@@ -2,6 +2,7 @@ import pygame
 
 #User files
 from engine.entity_system import Enemy, Player
+from engine.game_state_system import GameStateSystem
 from utils.sprite_sheet_selection import get_img_frame_surface
 from settings import  DIRECTION_VECTORS, ROOM_TILE_DICT, SCREEN_WIDTH, SCREEN_HEIGHT, TILE_SIZE, FPS, ROOM_WIDTH, ROOM_HEIGHT
 from utils.load_and_scale import load_and_scale, load_img
@@ -72,6 +73,10 @@ door_frame = pygame.Rect(
 
 #Resize the door to be a tile size
 door_surface = get_img_frame_surface(door_img, door_frame)
+
+pause_overlay = pygame.Surface((ROOM_WIDTH * TILE_SIZE, ROOM_HEIGHT * TILE_SIZE))
+pause_overlay.set_alpha(120)  # Set transparency level (0-255)
+pause_overlay.fill((0, 0, 0)) # Fill with semi-transparent black
 
 clock = pygame.time.Clock()
 running = True
@@ -205,110 +210,21 @@ def attempt_move(entity, dx, dy, room, room_pos):
     else:
         return entity.x, entity.y, room_pos, room
 
-while running:
+def draw_room(screen, room):
+    # '''Draws the room's tiles and entities'''
+    # for y in range(ROOM_HEIGHT):
+    #     for x in range(ROOM_WIDTH):
+    #         tile = room.room_map[y][x]
+    #         if tile == ROOM_TILE_DICT['FLOOR']:
+    #             screen.blit(floor_img, (x * TILE_SIZE, y * TILE_SIZE))
+    #         elif tile == ROOM_TILE_DICT['WALL']:
+    #             screen.blit(wall_img, (x * TILE_SIZE, y * TILE_SIZE))
+    #         elif tile == ROOM_TILE_DICT['DOOR']:
+    #             screen.blit(door_surface, (x * TILE_SIZE, y * TILE_SIZE))
 
-    #Handle Inputs 
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            running = False
+    # for entity in room.entities:
+    #     entity.draw(screen)
 
-        # if event.type == pygame.KEYDOWN:
-        #     new_x = player.x
-        #     new_y = player.y
-
-        #     #Setup movement keys (W,A,S,D)
-        #     if event.key == pygame.K_w:
-        #         new_y -= 1
-        #     if event.key == pygame.K_s:
-        #         new_y += 1
-        #     if event.key == pygame.K_a:
-        #         new_x -= 1
-        #     if event.key == pygame.K_d:
-        #         new_x += 1
-
-        #     attempt_move(player, new_x - player.x, new_y - player.y, room)
-
-        #     #Check if player transitioned rooms
-        #     if check_door_transition(player.x, player.y, room.room_map):
-
-        #         player.x, player.y, room_pos, direction, room = handle_room_transition(player.x, player.y, room_pos, direction, room)
-
-
-        # ------------------------------------------
-        # Continous movement handling for when keys are held down
-        # -------------------------------------------
-        current_time = pygame.time.get_ticks()
-        dx = 0
-        dy = 0
-
-        if current_time - player.last_move_time > player.move_delay and current_time > player.transition_cooldown:
-            keys = pygame.key.get_pressed()
-
-            if keys[pygame.K_w]:
-                dy = -1
-                player.facing = "up"
-            elif keys[pygame.K_s]:
-                dy = 1
-                player.facing = "down"
-            elif keys[pygame.K_a]:
-                dx = -1
-                player.facing = "left"
-            elif keys[pygame.K_d]:
-                dx = 1
-                player.facing = "right"
-
-            if (dx, dy) != (0, 0):
-                player.x, player.y, room_pos, room = attempt_move(player, dx, dy, room, room_pos)
-                player.last_move_time = current_time
-
-
-        # ------------------------------------------
-        # Interaction handling (E key)
-        # ------------------------------------------
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_e:
-                facing_dx, facing_dy = DIRECTION_VECTORS[player.facing]
-
-                facing_target_x = player.x + facing_dx
-                facing_target_y = player.y + facing_dy
-
-                target_entity = room.get_entity_at(facing_target_x, facing_target_y)
-
-                if target_entity:
-                    target_entity.interact(player, room)
-
-
-        # ------------------------------------------
-        # Combat handling (MouseButton Down key)
-        # ------------------------------------------
-        if event.type == pygame.MOUSEBUTTONDOWN:
-            facing_dx, facing_dy = DIRECTION_VECTORS[player.facing]
-
-            facing_target_x = player.x + facing_dx
-            facing_target_y = player.y + facing_dy
-
-            target_entity = room.get_entity_at(facing_target_x, facing_target_y)
-
-            if isinstance(target_entity, Enemy):
-                target_entity.hp -= player.attack
-                print(f'Attacked enemy! Enemy HP: {target_entity.hp}')
-
-                if target_entity.hp <= 0:
-                    print('Enemy defeated!')
-                    room.remove_entity(target_entity)
-
-
-    #Update Section
-
-    # -------------
-    # Update entities in the room (enemies, chests, healing fountains, etc.)
-    # -------------
-    for entity in room.entities:
-        if isinstance(entity, Enemy):
-            entity.update(player, room)
-
-
-    #Draw Section
 
     # fill the screen to wipe away anything from last frame
     screen.fill("black")
@@ -372,10 +288,111 @@ while running:
     #Draw Player tile
     screen.blit(player_surface, (player.x * TILE_SIZE, player.y * TILE_SIZE))
 
-    #Updates the full display surface to the screen
-    pygame.display.flip()
 
-    #limits FPS to 60
-    # clock.tick(FPS)
-    dt = clock.tick(FPS) / 1000
+game_state_system = GameStateSystem()
+while game_state_system.state != "quit":
+    for event in pygame.event.get():
+        game_state_system.update(event)
+
+    #Update Section
+    if game_state_system.state == "playing":
+        #Handle Inputs 
+        # for event in pygame.event.get():
+            # game_state_system.update(event)
+
+        # ------------------------------------------
+        # Continous movement handling for when keys are held down
+        # -------------------------------------------
+        current_time = pygame.time.get_ticks()
+        dx = 0
+        dy = 0
+
+        if current_time - player.last_move_time > player.move_delay and current_time > player.transition_cooldown:
+            keys = pygame.key.get_pressed()
+
+            if keys[pygame.K_w]:
+                dy = -1
+                player.facing = "up"
+            elif keys[pygame.K_s]:
+                dy = 1
+                player.facing = "down"
+            elif keys[pygame.K_a]:
+                dx = -1
+                player.facing = "left"
+            elif keys[pygame.K_d]:
+                dx = 1
+                player.facing = "right"
+
+            if (dx, dy) != (0, 0):
+                player.x, player.y, room_pos, room = attempt_move(player, dx, dy, room, room_pos)
+                player.last_move_time = current_time
+
+
+        # ------------------------------------------
+        # Interaction handling (E key)
+        # ------------------------------------------
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_e:
+                facing_dx, facing_dy = DIRECTION_VECTORS[player.facing]
+
+                facing_target_x = player.x + facing_dx
+                facing_target_y = player.y + facing_dy
+
+                target_entity = room.get_entity_at(facing_target_x, facing_target_y)
+
+                if target_entity:
+                    target_entity.interact(player, room)
+
+
+        # ------------------------------------------
+        # Combat handling (MouseButton Down key)
+        # ------------------------------------------
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            facing_dx, facing_dy = DIRECTION_VECTORS[player.facing]
+
+            facing_target_x = player.x + facing_dx
+            facing_target_y = player.y + facing_dy
+
+            target_entity = room.get_entity_at(facing_target_x, facing_target_y)
+            if current_time - player.last_attack_time >= player.attack_speed:
+                player.last_attack_time = current_time
+                if isinstance(target_entity, Enemy):
+                    target_entity.hp -= player.attack
+                    print(f'Attacked enemy! Enemy HP: {target_entity.hp}')
+
+                    if target_entity.hp <= 0:
+                        print('Enemy defeated!')
+                        room.remove_entity(target_entity)
+
+
+        
+
+        # -------------
+        # Update entities in the room (enemies, chests, healing fountains, etc.)
+        # -------------
+        for entity in room.entities:
+            if isinstance(entity, Enemy):
+                entity.update(player, room)
+
+
+        #Updates the full display surface to the screen
+        # pygame.display.flip()
+
+        #limits FPS to 60
+        # clock.tick(FPS)
+        dt = clock.tick(FPS) / 1000
+
+
+    #Draw Section
+    #We want to keep the screen with existing content while paused instead of filling it with black, so we can render a pause overlay on top of it.
+    draw_room(screen, room)
+
+
+    # If the game is paused, we still want to listen for events (like unpausing or quitting), but we won't update the game state or render the game world. 
+    # Instead, we can render a pause overlay or menu.
+    if game_state_system.state == "paused":
+        # TODO: Add pause menu options and navigation here (resume, settings, quit, etc.)
+        screen.blit(pause_overlay, (0, 0))
+
+    pygame.display.flip()
 pygame.quit()
