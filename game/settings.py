@@ -11,9 +11,6 @@ MAP_HEIGHT = 20
 #limits frame rates
 FPS = 60
 
-# milliseconds between moves when holding a key
-MOVE_DELAY = 100  
-
 #Room size
 ROOM_WIDTH = SCREEN_WIDTH // TILE_SIZE
 ROOM_HEIGHT = SCREEN_HEIGHT // TILE_SIZE
@@ -28,7 +25,7 @@ ROOM_TILE_DICT = {
     'DOOR': 2,   # door
     'ENEMY': 3,   # enemy
     'CHEST': 4,   # chest
-    'HEALING': 5    # healing
+    'HEALING': 5,    # healing
 }
 
 GAN_TILE_DICT = {

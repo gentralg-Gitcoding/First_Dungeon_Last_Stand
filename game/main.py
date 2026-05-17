@@ -3,7 +3,7 @@ import pygame
 #User files
 from engine.entity_system import Enemy, Player
 from utils.sprite_sheet_selection import get_img_frame_surface
-from settings import  DIRECTION_VECTORS, MOVE_DELAY, ROOM_TILE_DICT, SCREEN_WIDTH, SCREEN_HEIGHT, TILE_SIZE, FPS, ROOM_WIDTH, ROOM_HEIGHT
+from settings import  DIRECTION_VECTORS, ROOM_TILE_DICT, SCREEN_WIDTH, SCREEN_HEIGHT, TILE_SIZE, FPS, ROOM_WIDTH, ROOM_HEIGHT
 from utils.load_and_scale import load_and_scale, load_img
 from engine.map_generator import generate_dungeon_room
 
@@ -94,6 +94,7 @@ world_map[room_pos] = {
 #Place the player in the center of the first room
 center_x, center_y = room.center()
 player = Player(center_x, center_y, player_img)
+room.entities.append(player)
 
 def get_direction(dx, dy):
     '''Get the direction the player moves in'''
@@ -240,7 +241,7 @@ while running:
         dx = 0
         dy = 0
 
-        if current_time - player.last_move_time > MOVE_DELAY and current_time > player.transition_cooldown:
+        if current_time - player.last_move_time > player.move_delay and current_time > player.transition_cooldown:
             keys = pygame.key.get_pressed()
 
             if keys[pygame.K_w]:
@@ -262,13 +263,9 @@ while running:
 
 
         # ------------------------------------------
-        # Single key press handling for interactions and combat
+        # Interaction handling (E key)
         # ------------------------------------------
         if event.type == pygame.KEYDOWN:
-
-            # ------------------------------------------
-            # Interaction handling (E key)
-            # ------------------------------------------
             if event.key == pygame.K_e:
                 facing_dx, facing_dy = DIRECTION_VECTORS[player.facing]
 
@@ -306,6 +303,9 @@ while running:
     # -------------
     # Update entities in the room (enemies, chests, healing fountains, etc.)
     # -------------
+    for entity in room.entities:
+        if isinstance(entity, Enemy):
+            entity.update(player, room)
 
 
     #Draw Section

@@ -157,6 +157,11 @@ class Room:
             or self.entity_blocks_movement(x, y)
         )
 
+    def update_entity_position(self, entity, new_x, new_y):
+        old_x, old_y = entity.x, entity.y
+        self.room_map[old_y][old_x] = ROOM_TILE_DICT['FLOOR']  # Update old position to floor
+        self.room_map[new_y][new_x] = ROOM_TILE_DICT[entity.name]  # Update new position to enemy (or appropriate tile type based on entity)
+
     def remove_entity(self, entity):
         if entity in self.entities:
             self.entities.remove(entity)
@@ -431,7 +436,7 @@ def enforce_entity_limits(room, room_type):
 
             for y, x in tile_positions[:(count - max_limit)]:
                 matrix[y][x] = ROOM_TILE_DICT['FLOOR']
-                entities = [e for e in entities if not (getattr(e, 'x', None) == x and getattr(e, 'y', None) == y and getattr(e, 'name', None) == room_type)]
+                room.remove_entity(room.get_entity_at(x, y))
                 count -= 1
                 removed_count += 1
 
