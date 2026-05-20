@@ -26,6 +26,7 @@ ROOM_TILE_DICT = {
     'ENEMY': 3,   # enemy
     'CHEST': 4,   # chest
     'HEALING': 5,    # healing
+    'PLAYER': 6,    # player layer for rendering purposes
 }
 
 GAN_TILE_DICT = {

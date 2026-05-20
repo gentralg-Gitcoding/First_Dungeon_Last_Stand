@@ -1,6 +1,6 @@
 import pygame
 
-from settings import TILE_SIZE
+from settings import ROOM_HEIGHT, ROOM_TILE_DICT, ROOM_WIDTH, TILE_SIZE
 
 class Entity:
     def __init__(
@@ -42,11 +42,16 @@ class Entity:
         """
         pass
 
-    def render(self, screen, tile_size=TILE_SIZE):
+    def render(self, screen, sprite=None, tile_size=TILE_SIZE):
         """
         Draw entity to screen.
         """
-        if self.sprite:
+        if sprite:
+            screen.blit(
+                sprite,
+                (self.x * tile_size, self.y * tile_size)
+            )
+        else:
             screen.blit(
                 self.sprite,
                 (self.x * tile_size, self.y * tile_size)
@@ -59,10 +64,11 @@ class Player(Entity):
             x,
             y,
             sprite=sprite,
-            blocks_movement=True,
+            blocks_movement=False,
             name="PLAYER"
         )
 
+        self.max_hp = 100
         self.hp = 100
         self.attack = 10
         self.attack_speed = 500
@@ -71,6 +77,85 @@ class Player(Entity):
         self.last_attack_time = 0
         self.transition_cooldown = 0
         self.facing = "down"
+        self.is_hit = False
+        self.hit_cooldown = 100
+
+    def get_direction(self, dx, dy):
+        '''Get the direction the player moves in'''
+        if(dx == 1 and dy == 0):
+            self.facing = "right"
+            return 'right'
+
+        elif(dx == 0 and dy == -1):
+            self.facing = "up"
+            return 'top'
+
+        elif(dx == -1 and dy == 0):
+            self.facing = "left"
+            return 'left'
+
+        elif(dx == 0 and dy == 1):
+            self.facing = "down"
+            return 'bottom'
+
+    def handle_room_transition(self, transition_direction, room_pos, room):
+        '''Handles player transitioning between rooms when stepping on a door tile'''
+        # Delay player movement for a short time to prevent multiple room transitions from one key press due to the player still being on the door tile for multiple frames. 
+        # This is a temporary solution until we implement seamless movement and better input handling.
+        self.transition_cooldown = pygame.time.get_ticks() + 250
+
+        if not transition_direction:
+            return room_pos
+
+        new_pos = room.move_rooms(room_pos, transition_direction)
+
+        return new_pos
+
+    def attempt_move(self, dx, dy, room, room_pos):
+        '''Movement check for player movement and room transitions. 
+        Checks if player is trying to move onto a door tile to transition rooms, or if the tile they are trying to move onto is blocked.'''
+        target_x = self.x + dx
+        target_y = self.y + dy
+
+        #Check which way the player went
+        transition_direction = self.get_direction(dx, dy)
+
+        #Check if target is a door and if so, handle room transition
+        if room.room_map[target_y][target_x] == ROOM_TILE_DICT['DOOR']:
+            room_pos = self.handle_room_transition(transition_direction, room_pos, room)
+            return room_pos, room
+        elif not room.is_blocked(target_x, target_y):
+            room.update_entity_position(self, self.x + dx, self.y + dy)
+            self.move(dx, dy)
+            return room_pos, room
+        else:
+            return room_pos, room
+
+    def set_player_position(self, transition_direction, room):
+        '''Reposition player depending on door direction you move towards when transitioning rooms'''
+        if(transition_direction == 'right'):
+            #Player exits right
+            self.x, self.y = 1, ROOM_HEIGHT // 2
+            room.entities.append(self)
+            return room 
+
+        elif(transition_direction == 'top'):
+            #Player exits top
+            self.x, self.y = ROOM_WIDTH // 2, ROOM_HEIGHT - 2
+            room.entities.append(self)
+            return room
+
+        elif(transition_direction == 'left'):
+            #Player exits left
+            self.x, self.y = ROOM_WIDTH - 2, ROOM_HEIGHT // 2
+            room.entities.append(self)
+            return room
+
+        elif(transition_direction == 'bottom'):
+            #Player exits bottom
+            self.x, self.y = ROOM_WIDTH // 2, 1
+            room.entities.append(self)
+            return room
 
 
 class Enemy(Entity):
@@ -87,7 +172,7 @@ class Enemy(Entity):
         self.hp = 20
         self.attack = 5
         self.attack_speed = 2000
-        self.init_attack_delay = 200    #delay before enemy can attack after switching to attack state for dodging purposes
+        self.init_attack_delay = 500    #delay before enemy can attack after switching to attack state for dodging purposes
 
         self.move_speed = 1000
         self.last_move_time = 0
@@ -95,30 +180,26 @@ class Enemy(Entity):
 
         self.aggro_range = 5
 
+        self.is_hit = False
+        self.hit_cooldown = 100
+
     def attempt_move(self, dx, dy, room):
         '''Movement check for enemy movement and room transitions. 
         Checks if enemy is trying to move onto a blockable tile to transition rooms, or if the tile they are trying to move onto is blocked.'''
         target_x = self.x + dx
         target_y = self.y + dy
 
-        #Check which way the player went
-        # transition_direction = get_direction(dx, dy)
-
-        #Check if target is a door and if so, handle room transition
-        # if room.room_map[target_y][target_x] == ROOM_TILE_DICT['DOOR']:
-        #     (entity.x, entity.y), room_pos, room = handle_room_transition(entity.position, transition_direction, room_pos, room)
-        #     return entity.x, entity.y, room_pos, room
         if not room.is_blocked(target_x, target_y):
             room.update_entity_position(self, self.x + dx, self.y + dy)
             self.move(dx, dy)
-            # return True
-        # else:
-        #     return False
 
     def update(self, player, room):
         distance_to_player = abs(self.x - player.x) + abs(self.y - player.y)
         current_time = pygame.time.get_ticks()
 
+        # -----------------------------
+        # Simple state machine for enemy behavior based on distance to player
+        # -----------------------------
         if distance_to_player <= 1:
             self.state = "attack"
         elif distance_to_player <= self.aggro_range:
@@ -126,6 +207,10 @@ class Enemy(Entity):
         else:
             self.state = "idle"
 
+
+        # ------------------------------
+        # State behavior implementations
+        # ------------------------------
         if self.state == "attack":
             if current_time - self.last_attack_time >= self.attack_speed and current_time - self.last_move_time >= self.init_attack_delay:
                 player.hp -= self.attack
@@ -147,6 +232,12 @@ class Enemy(Entity):
                 self.attempt_move(dx, dy, room)
 
                 self.last_move_time = current_time
+
+        # ------------------------------------------
+        # Additional logic for hit cooldowns
+        # ------------------------------------------
+        if current_time - self.is_hit > self.hit_cooldown:
+            self.is_hit = False
 
 
 class Chest(Entity):
@@ -178,5 +269,5 @@ class HealingFountain(Entity):
         )
 
     def interact(self, player, room):
-        player.hp = 100
+        player.hp = player.max_hp
         print("You feel refreshed!")

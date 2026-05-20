@@ -23,14 +23,15 @@ wall_img = load_and_scale("game/assets/tiles/Brickwall5_Texture.png", namehint="
 #Load enemy assets
 bat_grey_img = load_and_scale('game/assets/DO Monsters/Monsters/BatGrey.PNG', namehint='bat_grey')
 bat_grey_img.set_colorkey((255, 0, 255, 255))
+# bat_grey_img.set_alpha(0)
 
-#Load loot assets
-chest_1_img = load_and_scale('game/assets/DO Terrain/Terrain/L2_Chest01.PNG', namehint='chest_1')
-chest_1_img.set_colorkey((255, 0, 255, 255))
+# #Load loot assets
+# chest_1_img = load_and_scale('game/assets/DO Terrain/Terrain/L2_Chest01.PNG', namehint='chest_1')
+# chest_1_img.set_colorkey((255, 0, 255, 255))
 
-#Load healing assets
-fountain_img = load_and_scale('game/assets/DO Terrain/Terrain/L2_Fountain01.PNG', namehint='fountain')
-fountain_img.set_colorkey((255, 0, 255, 255))
+# #Load healing assets
+# fountain_img = load_and_scale('game/assets/DO Terrain/Terrain/L2_Fountain01.PNG', namehint='fountain')
+# fountain_img.set_colorkey((255, 0, 255, 255))
 
 
 #Optional Transparency
@@ -98,117 +99,26 @@ world_map[room_pos] = {
 
 #Place the player in the center of the first room
 center_x, center_y = room.center()
-player = Player(center_x, center_y, player_img)
+player = Player(center_x, center_y, player_surface)
 room.entities.append(player)
 
-def get_direction(dx, dy):
-    '''Get the direction the player moves in'''
-    if(dx == 1 and dy == 0):
-        return 'right' 
+def new_room_transition(player, transition_direction, room_pos):
 
-    elif(dx == 0 and dy == -1):
-        return  'top'
-
-    elif(dx == -1 and dy == 0):
-        return 'left'
-
-    elif(dx == 0 and dy == 1):
-        return 'bottom'
-
-def set_player_position(direction):
-    '''Reposition player depending on door direction you move towards when transitioning rooms'''
-    if(direction == 'right'):
-        #Player exits right
-        return 1, ROOM_HEIGHT // 2
-
-    elif(direction == 'top'):
-        #Player exits top
-        return ROOM_WIDTH // 2, ROOM_HEIGHT - 2
-
-    elif(direction == 'left'):
-        #Player exits left
-        return ROOM_WIDTH - 2, ROOM_HEIGHT // 2
-
-    elif(direction == 'bottom'):
-        #Player exits bottom
-        return ROOM_WIDTH // 2, 1
-
-def move_rooms(room_pos, direction):
-    '''Updates the room in the world map the player moved to'''
-    x, y = room_pos
-
-    if direction == 'right':
-        return (x + 1, y)
-    if direction == 'top':
-        return (x, y - 1)
-    if direction == 'left':
-        return (x - 1, y)
-    if direction == 'bottom':
-        return (x, y + 1)
-
-def check_door_transition(target_x, target_y, room_map=room.room_map):
-    '''Checks if player is on a door tile to transition rooms'''
-    px, py = target_x, target_y
-
-    if room_map[py][px] == ROOM_TILE_DICT['DOOR']:
-        return True
-
-    return False
-
-def handle_room_transition(player_position, transition_direction, room_pos, room=room):
-    '''Handles player transitioning between rooms when stepping on a door tile'''
-    # Delay player movement for a short time to prevent multiple room transitions from one key press due to the player still being on the door tile for multiple frames. 
-    # This is a temporary solution until we implement seamless movement and better input handling.
-    player.transition_cooldown = pygame.time.get_ticks() + 250
-
-
-    if not transition_direction:
-        return player_position, room_pos, room
-
-    new_pos = move_rooms(room_pos, transition_direction)
-
-    if new_pos in world_map:
-        # Room already exists
-        # print(f'Room: {new_pos}')
-        # print(world_map[new_pos]['room'].type)
-        room = world_map[new_pos]['room']
-    else:
-        # Generate new room
-        new_room = generate_dungeon_room()
-        # print(f'Entered new room: {new_pos}')
-        # print(f'New room type: {new_room.type}')
-        world_map[new_pos] = {
-            'room': new_room,
-            'type': new_room.type,
-            'cleared': False
-        }
-        room = new_room
-
-    room_pos = new_pos
+    new_room = generate_dungeon_room()
+    # print(f'Entered new room: {new_pos}')
+    # print(f'New room type: {new_room.type}')
+    world_map[room_pos] = {
+        'room': new_room,
+        'type': new_room.type,
+        'cleared': False
+    }
 
     # reposition player depending on door used
-    player_position = set_player_position(transition_direction)
+    new_room = player.set_player_position(transition_direction, new_room)
 
-    return player_position, room_pos, room 
+    return new_room
 
-def attempt_move(entity, dx, dy, room, room_pos):
-    '''Movement check for player movement and room transitions. 
-    Checks if player is trying to move onto a door tile to transition rooms, or if the tile they are trying to move onto is blocked.'''
-    target_x = entity.x + dx
-    target_y = entity.y + dy
 
-    #Check which way the player went
-    transition_direction = get_direction(dx, dy)
-
-    #Check if target is a door and if so, handle room transition
-    if room.room_map[target_y][target_x] == ROOM_TILE_DICT['DOOR']:
-        (entity.x, entity.y), room_pos, room = handle_room_transition(entity.position, transition_direction, room_pos, room)
-        return entity.x, entity.y, room_pos, room
-    elif not room.is_blocked(target_x, target_y):
-        entity.move(dx, dy)
-        return entity.x, entity.y, room_pos, room
-    else:
-        return entity.x, entity.y, room_pos, room
 
 def draw_room(screen, room):
     # '''Draws the room's tiles and entities'''
@@ -222,9 +132,6 @@ def draw_room(screen, room):
     #         elif tile == ROOM_TILE_DICT['DOOR']:
     #             screen.blit(door_surface, (x * TILE_SIZE, y * TILE_SIZE))
 
-    # for entity in room.entities:
-    #     entity.draw(screen)
-
 
     # fill the screen to wipe away anything from last frame
     screen.fill("black")
@@ -237,31 +144,42 @@ def draw_room(screen, room):
             if tile == ROOM_TILE_DICT['WALL']:
                 #Draws the png for the walls
                 screen.blit(wall_img, (x * TILE_SIZE, y * TILE_SIZE))
-            elif tile == ROOM_TILE_DICT['FLOOR']:
+            elif (tile == ROOM_TILE_DICT['FLOOR']
+                  or tile == ROOM_TILE_DICT['ENEMY']
+                  or tile == ROOM_TILE_DICT['CHEST']
+                  or tile == ROOM_TILE_DICT['HEALING']
+                  or tile == ROOM_TILE_DICT['PLAYER']
+            ):
                 #Draws the png for the floors
                 screen.blit(floor_img, (x * TILE_SIZE, y * TILE_SIZE))
             elif tile == ROOM_TILE_DICT['DOOR']:
                 screen.blit(door_surface, (x * TILE_SIZE, y * TILE_SIZE))
-            # TODO: Refactor to use Entity system instead of hardcoding tile types here. 
-            # Would allow for more dynamic interactions and behaviors for different tile types (enemies, loot, healing, etc.) instead of just rendering a static image.
-            elif tile == ROOM_TILE_DICT['ENEMY']:
-                screen.blits((
-                    (floor_img, (x * TILE_SIZE, y * TILE_SIZE)),
-                    (bat_grey_img, (x * TILE_SIZE, y * TILE_SIZE))
-                    )
-                )
-            elif tile == ROOM_TILE_DICT['CHEST']:
-                screen.blits((
-                    (floor_img, (x * TILE_SIZE, y * TILE_SIZE)),
-                    (chest_1_img, (x * TILE_SIZE, y * TILE_SIZE))
-                    )
-                )
-            elif tile == ROOM_TILE_DICT['HEALING']:
-                screen.blits((
-                    (floor_img, (x * TILE_SIZE, y * TILE_SIZE)),
-                    (fountain_img, (x * TILE_SIZE, y * TILE_SIZE))
-                    )
-                )
+
+            # Add entity rendering for tiles that have entities on them (enemies, chests, healing fountains, etc.)
+            # elif tile == ROOM_TILE_DICT['ENEMY']:
+            #     screen.blits((
+            #         (floor_img, (x * TILE_SIZE, y * TILE_SIZE)),
+            #         (bat_grey_img, (x * TILE_SIZE, y * TILE_SIZE))
+            #         )
+            #     )
+            # elif tile == ROOM_TILE_DICT['CHEST']:
+            #     screen.blits((
+            #         (floor_img, (x * TILE_SIZE, y * TILE_SIZE)),
+            #         (chest_1_img, (x * TILE_SIZE, y * TILE_SIZE))
+            #         )
+            #     )
+            # elif tile == ROOM_TILE_DICT['HEALING']:
+            #     screen.blits((
+            #         (floor_img, (x * TILE_SIZE, y * TILE_SIZE)),
+            #         (fountain_img, (x * TILE_SIZE, y * TILE_SIZE))
+            #         )
+            #     )
+    for entity in room.entities:
+        # if isinstance(entity, Enemy) and entity.is_hit:
+        if isinstance(entity, Enemy):   #Testing hit effect on all enemies for now
+            entity.render(screen, bat_grey_img)
+        else:
+            entity.render(screen)
 
 
     #VISUAL DEBUG ONLY
@@ -286,19 +204,22 @@ def draw_room(screen, room):
     )
 
     #Draw Player tile
-    screen.blit(player_surface, (player.x * TILE_SIZE, player.y * TILE_SIZE))
+    # screen.blit(player_surface, (player.x * TILE_SIZE, player.y * TILE_SIZE))
+    pygame.draw.rect(player.sprite, 'black', (0, 0, player_frame_width * TILE_SIZE, 5))   #Always max hp bar background
+
+    current_width = (player.hp / player.max_hp) * player_frame_width * TILE_SIZE
+
+    pygame.draw.rect(player.sprite, 'red', (0, 0, current_width, 5))
 
 
 game_state_system = GameStateSystem()
 while game_state_system.state != "quit":
+    #Handle Inputs 
     for event in pygame.event.get():
         game_state_system.update(event)
 
     #Update Section
     if game_state_system.state == "playing":
-        #Handle Inputs 
-        # for event in pygame.event.get():
-            # game_state_system.update(event)
 
         # ------------------------------------------
         # Continous movement handling for when keys are held down
@@ -312,21 +233,20 @@ while game_state_system.state != "quit":
 
             if keys[pygame.K_w]:
                 dy = -1
-                player.facing = "up"
             elif keys[pygame.K_s]:
                 dy = 1
-                player.facing = "down"
             elif keys[pygame.K_a]:
                 dx = -1
-                player.facing = "left"
             elif keys[pygame.K_d]:
                 dx = 1
-                player.facing = "right"
 
             if (dx, dy) != (0, 0):
-                player.x, player.y, room_pos, room = attempt_move(player, dx, dy, room, room_pos)
-                player.last_move_time = current_time
+                room_pos, room = player.attempt_move(dx, dy, room, room_pos)
+                if room_pos not in world_map:
+                    direction = player.get_direction(dx, dy)
+                    room = new_room_transition(player, direction, room_pos)
 
+                player.last_move_time = current_time
 
         # ------------------------------------------
         # Interaction handling (E key)
@@ -358,14 +278,12 @@ while game_state_system.state != "quit":
                 player.last_attack_time = current_time
                 if isinstance(target_entity, Enemy):
                     target_entity.hp -= player.attack
+                    target_entity.is_hit = True
                     print(f'Attacked enemy! Enemy HP: {target_entity.hp}')
 
                     if target_entity.hp <= 0:
                         print('Enemy defeated!')
                         room.remove_entity(target_entity)
-
-
-        
 
         # -------------
         # Update entities in the room (enemies, chests, healing fountains, etc.)
@@ -374,16 +292,11 @@ while game_state_system.state != "quit":
             if isinstance(entity, Enemy):
                 entity.update(player, room)
 
-
-        #Updates the full display surface to the screen
-        # pygame.display.flip()
-
         #limits FPS to 60
-        # clock.tick(FPS)
         dt = clock.tick(FPS) / 1000
 
 
-    #Draw Section
+    #Draw Section we always want this on to keep the screen updated with the current game state, even if paused.
     #We want to keep the screen with existing content while paused instead of filling it with black, so we can render a pause overlay on top of it.
     draw_room(screen, room)
 
@@ -392,7 +305,13 @@ while game_state_system.state != "quit":
     # Instead, we can render a pause overlay or menu.
     if game_state_system.state == "paused":
         # TODO: Add pause menu options and navigation here (resume, settings, quit, etc.)
-        screen.blit(pause_overlay, (0, 0))
+        paused_background = screen.copy()
+        screen.blits((
+            (paused_background, (0, 0)), 
+            (pause_overlay, (0, 0))
+            )
+        )
 
+    # Always update the display at the end of the game loop
     pygame.display.flip()
 pygame.quit()

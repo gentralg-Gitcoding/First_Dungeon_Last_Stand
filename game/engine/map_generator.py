@@ -5,16 +5,21 @@ import copy
 
 from huggingface_hub import hf_hub_download
 import numpy as np
+import pygame
 from ai.gan_generator import Generator, generate_room
 from ai.diffusion_generator import SimpleUNet, generate_diffusion_dungeon_room
 from engine.entity_system import Chest, Enemy, Entity, HealingFountain
 from utils.load_and_scale import load_and_scale
-from utils.data_to_dataloader_converter import get_dataloader
-from settings import ROOM_HEIGHT, ROOM_WIDTH, MAX_ROOMS, ROOM_TILE_DICT, ROOM_TYPES
+from settings import ROOM_HEIGHT, ROOM_WIDTH, MAX_ROOMS, ROOM_TILE_DICT, ROOM_TYPES, SCREEN_HEIGHT, SCREEN_WIDTH
 from utils.save_load_data import load_json_dataset
 import torch 
 
 
+
+pygame.init()
+#Screen Size
+screen = pygame.display.set_mode(size=(SCREEN_WIDTH, SCREEN_HEIGHT))
+pygame.display.set_caption("First Dungeon Last Stand")
 
 
 
@@ -30,15 +35,11 @@ output_type = OUTPUT_OPTIONS[0]
 if output_type == "testing":
     DATASET = load_json_dataset('game/data/synthetic_rooms_dataset.json')
 
-
-
-
 GAN_PATH = "game/data/models/generator_epoch_49.pth"
 DIFFUSION_PATH = "game/data/models/diffusion_model.pth"
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
-# Room Tracker
-rooms = []
+rooms = []      # Room Tracker
 model_selection = "diffusion"  # Change to "gan" to use the GAN model instead
 
 if model_selection == "gan":
@@ -70,6 +71,19 @@ if state_dict:
     GENERATOR.load_state_dict(state_dict)
     GENERATOR.to(DEVICE)
 
+
+#Load enemy assets
+bat_grey_img = load_and_scale('game/assets/DO Monsters/Monsters/BatGrey.PNG', namehint='bat_grey')
+bat_grey_img.set_colorkey((255, 0, 255, 255))
+bat_grey_img_hit = bat_grey_img.copy().set_alpha(255)
+
+#Load loot assets
+chest_1_img = load_and_scale('game/assets/DO Terrain/Terrain/L2_Chest01.PNG', namehint='chest_1')
+chest_1_img.set_colorkey((255, 0, 255, 255))
+
+#Load healing assets
+fountain_img = load_and_scale('game/assets/DO Terrain/Terrain/L2_Fountain01.PNG', namehint='fountain')
+fountain_img.set_colorkey((255, 0, 255, 255))
 
 class Room:
     #Starting point: x, y
@@ -167,6 +181,18 @@ class Room:
             self.entities.remove(entity)
             self.room_map[entity.y][entity.x] = ROOM_TILE_DICT['FLOOR']  # Update tilemap to reflect entity removal
 
+    def move_rooms(self, room_pos, transition_direction):
+        '''Updates the room in the world map the player moved to'''
+        x, y = room_pos
+
+        if transition_direction == 'right':
+            return (x + 1, y)
+        if transition_direction == 'top':
+            return (x, y - 1)
+        if transition_direction == 'left':
+            return (x - 1, y)
+        if transition_direction == 'bottom':
+            return (x, y + 1)
 
 def assign_room_type(room):
     global rooms
@@ -276,13 +302,13 @@ def apply_entities(room, generated, mask, density=0.6):
                 if entity == ROOM_TILE_DICT['WALL']:     #Wall
                     room_map[y][x] = ROOM_TILE_DICT['WALL']
                 elif entity == ROOM_TILE_DICT['ENEMY']:     #Enemy
-                    entities.append(Enemy(x, y, None))
+                    entities.append(Enemy(x, y, bat_grey_img))
                     room_map[y][x] = ROOM_TILE_DICT['ENEMY']
                 elif entity == ROOM_TILE_DICT['CHEST']:     #Chest
-                    entities.append(Chest(x, y, None))
+                    entities.append(Chest(x, y, chest_1_img))
                     room_map[y][x] = ROOM_TILE_DICT['CHEST']    
                 elif entity == ROOM_TILE_DICT['HEALING']:     #Healing
-                    entities.append(HealingFountain(x, y, None))
+                    entities.append(HealingFountain(x, y, fountain_img))
                     room_map[y][x] = ROOM_TILE_DICT['HEALING']
 
     return room_map, entities
@@ -454,11 +480,11 @@ def enforce_entity_limits(room, room_type):
             for y, x in floor_positions[:(min_limit - count)]:
                 matrix[y][x] = tile_type
                 if tile_type == ROOM_TILE_DICT['ENEMY']:
-                    entities.append(Enemy(x, y, None))
+                    entities.append(Enemy(x, y, bat_grey_img))
                 elif tile_type == ROOM_TILE_DICT['CHEST']:
-                    entities.append(Chest(x, y, None))
+                    entities.append(Chest(x, y, chest_1_img))
                 elif tile_type == ROOM_TILE_DICT['HEALING']:
-                    entities.append(HealingFountain(x, y, None))
+                    entities.append(HealingFountain(x, y, fountain_img))
                 added_count += 1
 
 
