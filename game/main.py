@@ -23,7 +23,10 @@ wall_img = load_and_scale("game/assets/tiles/Brickwall5_Texture.png", namehint="
 #Load enemy assets
 bat_grey_img = load_and_scale('game/assets/DO Monsters/Monsters/BatGrey.PNG', namehint='bat_grey')
 bat_grey_img.set_colorkey((255, 0, 255, 255))
-# bat_grey_img.set_alpha(0)
+bat_grey_img_hit = bat_grey_img.copy()
+bat_mask = pygame.mask.from_surface(bat_grey_img_hit)
+bat_grey_img_hit.fill((255, 255, 255), special_flags=pygame.BLEND_RGB_MAX)  # Make the hit version of the sprite white to indicate being hit, can be changed to red or something else later for better feedback.
+bat_grey_img_hit = bat_mask.to_surface(bat_grey_img_hit, unsetcolor=(0, 0, 0, 0), setcolor=(255, 255, 255, 255))
 
 # #Load loot assets
 # chest_1_img = load_and_scale('game/assets/DO Terrain/Terrain/L2_Chest01.PNG', namehint='chest_1')
@@ -56,6 +59,10 @@ player_frame = pygame.Rect(
 
 #Resize the character to be a tile size
 player_surface = get_img_frame_surface(player_img, player_frame)
+player_surface_hit = player_surface.copy()
+player_mask = pygame.mask.from_surface(player_surface_hit)
+player_surface_hit.fill((255,255,255))
+player_surface_hit = player_mask.to_surface(player_surface_hit, unsetcolor=(0,0,0,0), setcolor=(255, 255, 255, 255))
 
 #Load door sprite asset 
 door_img = load_img('game/assets/doors.png', 'doors')
@@ -85,13 +92,12 @@ dt = 0
 
 #Create world's starting zone 
 world_map = {}
-room_pos = (0, 0)
 
 #Create first room on app start
 room = generate_dungeon_room()
 
 #Put first room into world map
-world_map[room_pos] = {
+world_map[room.room_pos] = {
     "room": room,
     "type": room.type,
     "cleared": True     #First room is cleared
@@ -101,24 +107,6 @@ world_map[room_pos] = {
 center_x, center_y = room.center()
 player = Player(center_x, center_y, player_surface)
 room.entities.append(player)
-
-def new_room_transition(player, transition_direction, room_pos):
-
-    new_room = generate_dungeon_room()
-    # print(f'Entered new room: {new_pos}')
-    # print(f'New room type: {new_room.type}')
-    world_map[room_pos] = {
-        'room': new_room,
-        'type': new_room.type,
-        'cleared': False
-    }
-
-    # reposition player depending on door used
-    new_room = player.set_player_position(transition_direction, new_room)
-
-    return new_room
-
-
 
 def draw_room(screen, room):
     # '''Draws the room's tiles and entities'''
@@ -155,29 +143,14 @@ def draw_room(screen, room):
             elif tile == ROOM_TILE_DICT['DOOR']:
                 screen.blit(door_surface, (x * TILE_SIZE, y * TILE_SIZE))
 
-            # Add entity rendering for tiles that have entities on them (enemies, chests, healing fountains, etc.)
-            # elif tile == ROOM_TILE_DICT['ENEMY']:
-            #     screen.blits((
-            #         (floor_img, (x * TILE_SIZE, y * TILE_SIZE)),
-            #         (bat_grey_img, (x * TILE_SIZE, y * TILE_SIZE))
-            #         )
-            #     )
-            # elif tile == ROOM_TILE_DICT['CHEST']:
-            #     screen.blits((
-            #         (floor_img, (x * TILE_SIZE, y * TILE_SIZE)),
-            #         (chest_1_img, (x * TILE_SIZE, y * TILE_SIZE))
-            #         )
-            #     )
-            # elif tile == ROOM_TILE_DICT['HEALING']:
-            #     screen.blits((
-            #         (floor_img, (x * TILE_SIZE, y * TILE_SIZE)),
-            #         (fountain_img, (x * TILE_SIZE, y * TILE_SIZE))
-            #         )
-            #     )
+    # -------------
+    # Draw entities in the room (player, enemies, chests, healing fountains, etc.)
+    # -------------
     for entity in room.entities:
-        # if isinstance(entity, Enemy) and entity.is_hit:
-        if isinstance(entity, Enemy):   #Testing hit effect on all enemies for now
-            entity.render(screen, bat_grey_img)
+        if isinstance(entity, Player):
+            entity.render(screen, player_surface_hit if entity.is_hit else player_surface)
+        elif isinstance(entity, Enemy):
+            entity.render(screen, bat_grey_img_hit if entity.is_hit else bat_grey_img)
         else:
             entity.render(screen)
 
@@ -203,13 +176,14 @@ def draw_room(screen, room):
         5
     )
 
-    #Draw Player tile
-    # screen.blit(player_surface, (player.x * TILE_SIZE, player.y * TILE_SIZE))
-    pygame.draw.rect(player.sprite, 'black', (0, 0, player_frame_width * TILE_SIZE, 5))   #Always max hp bar background
+    #Draw Player health bar above their head
+    player_rect = player.sprite.get_rect(topleft=(player.x * TILE_SIZE, player.y * TILE_SIZE))
 
-    current_width = (player.hp / player.max_hp) * player_frame_width * TILE_SIZE
+    pygame.draw.rect(screen, 'black', (player_rect.x, player_rect.y - 8, TILE_SIZE, 5))   #Always max hp bar background
 
-    pygame.draw.rect(player.sprite, 'red', (0, 0, current_width, 5))
+    current_width = (player.hp / player.max_hp) * TILE_SIZE 
+
+    pygame.draw.rect(screen, 'red', (player_rect.x, player_rect.y - 8, current_width, 5))
 
 
 game_state_system = GameStateSystem()
@@ -241,10 +215,7 @@ while game_state_system.state != "quit":
                 dx = 1
 
             if (dx, dy) != (0, 0):
-                room_pos, room = player.attempt_move(dx, dy, room, room_pos)
-                if room_pos not in world_map:
-                    direction = player.get_direction(dx, dy)
-                    room = new_room_transition(player, direction, room_pos)
+                room, world_map = player.attempt_move(dx, dy, room, world_map)
 
                 player.last_move_time = current_time
 
@@ -278,6 +249,7 @@ while game_state_system.state != "quit":
                 player.last_attack_time = current_time
                 if isinstance(target_entity, Enemy):
                     target_entity.hp -= player.attack
+                    target_entity.last_hit_time = current_time
                     target_entity.is_hit = True
                     print(f'Attacked enemy! Enemy HP: {target_entity.hp}')
 
@@ -289,6 +261,8 @@ while game_state_system.state != "quit":
         # Update entities in the room (enemies, chests, healing fountains, etc.)
         # -------------
         for entity in room.entities:
+            if isinstance(entity, Player):
+                entity.update(room)
             if isinstance(entity, Enemy):
                 entity.update(player, room)
 

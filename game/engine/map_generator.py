@@ -75,7 +75,6 @@ if state_dict:
 #Load enemy assets
 bat_grey_img = load_and_scale('game/assets/DO Monsters/Monsters/BatGrey.PNG', namehint='bat_grey')
 bat_grey_img.set_colorkey((255, 0, 255, 255))
-bat_grey_img_hit = bat_grey_img.copy().set_alpha(255)
 
 #Load loot assets
 chest_1_img = load_and_scale('game/assets/DO Terrain/Terrain/L2_Chest01.PNG', namehint='chest_1')
@@ -104,6 +103,7 @@ class Room:
         self.doors = self.place_doors(self.room_map)
 
         self.entities = list[Entity]()
+        self.room_pos = (0, 0)    # Will be updated when player enters the room
 
     def center(self):
         return (self.x + self.w // 2, self.y + self.h // 2)
@@ -181,18 +181,36 @@ class Room:
             self.entities.remove(entity)
             self.room_map[entity.y][entity.x] = ROOM_TILE_DICT['FLOOR']  # Update tilemap to reflect entity removal
 
-    def move_rooms(self, room_pos, transition_direction):
+    def move_rooms(self, transition_direction, world_map):
         '''Updates the room in the world map the player moved to'''
-        x, y = room_pos
+        x, y = self.room_pos
 
         if transition_direction == 'right':
-            return (x + 1, y)
-        if transition_direction == 'top':
-            return (x, y - 1)
-        if transition_direction == 'left':
-            return (x - 1, y)
-        if transition_direction == 'bottom':
-            return (x, y + 1)
+            x += 1
+        elif transition_direction == 'top':
+            y -= 1
+        elif transition_direction == 'left':
+            x -= 1
+        elif transition_direction == 'bottom':
+            y += 1
+
+        if (x, y) not in world_map:
+            room = generate_dungeon_room()
+            room.room_pos = (x, y)
+            # print(f'Entered new room: {new_pos}')
+            # print(f'New room type: {new_room.type}')
+            world_map[room.room_pos] = {
+                'room': room,
+                'type': room.type,
+                'cleared': False
+            }
+        else:
+            room = world_map[(x,y)]['room']
+
+        # reposition player depending on door used
+        # room = player.set_player_position(transition_direction, room)
+
+        return room, world_map
 
 def assign_room_type(room):
     global rooms

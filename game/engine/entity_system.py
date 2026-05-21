@@ -78,7 +78,14 @@ class Player(Entity):
         self.transition_cooldown = 0
         self.facing = "down"
         self.is_hit = False
+        self.last_hit_time = 0
         self.hit_cooldown = 100
+
+    def update(self, room):
+        current_time = pygame.time.get_ticks()
+        if current_time - self.last_hit_time >= self.hit_cooldown:
+            self.is_hit = False
+            self.last_hit_time = current_time
 
     def get_direction(self, dx, dy):
         '''Get the direction the player moves in'''
@@ -98,20 +105,20 @@ class Player(Entity):
             self.facing = "down"
             return 'bottom'
 
-    def handle_room_transition(self, transition_direction, room_pos, room):
+    def handle_room_transition(self, room, world_map, transition_direction):
         '''Handles player transitioning between rooms when stepping on a door tile'''
         # Delay player movement for a short time to prevent multiple room transitions from one key press due to the player still being on the door tile for multiple frames. 
         # This is a temporary solution until we implement seamless movement and better input handling.
         self.transition_cooldown = pygame.time.get_ticks() + 250
 
         if not transition_direction:
-            return room_pos
+            return room
 
-        new_pos = room.move_rooms(room_pos, transition_direction)
+        room, world_map = room.move_rooms(transition_direction, world_map)
+        room = self.set_player_position(room, transition_direction)
+        return room, world_map
 
-        return new_pos
-
-    def attempt_move(self, dx, dy, room, room_pos):
+    def attempt_move(self, dx, dy, room, world_map):
         '''Movement check for player movement and room transitions. 
         Checks if player is trying to move onto a door tile to transition rooms, or if the tile they are trying to move onto is blocked.'''
         target_x = self.x + dx
@@ -122,16 +129,16 @@ class Player(Entity):
 
         #Check if target is a door and if so, handle room transition
         if room.room_map[target_y][target_x] == ROOM_TILE_DICT['DOOR']:
-            room_pos = self.handle_room_transition(transition_direction, room_pos, room)
-            return room_pos, room
+            room, world_map = self.handle_room_transition(room, world_map, transition_direction)
+            return room, world_map
         elif not room.is_blocked(target_x, target_y):
             room.update_entity_position(self, self.x + dx, self.y + dy)
             self.move(dx, dy)
-            return room_pos, room
+            return room, world_map
         else:
-            return room_pos, room
+            return room, world_map
 
-    def set_player_position(self, transition_direction, room):
+    def set_player_position(self, room, transition_direction):
         '''Reposition player depending on door direction you move towards when transitioning rooms'''
         if(transition_direction == 'right'):
             #Player exits right
@@ -157,7 +164,6 @@ class Player(Entity):
             room.entities.append(self)
             return room
 
-
 class Enemy(Entity):
     def __init__(self, x, y, sprite):
         super().__init__(
@@ -168,19 +174,20 @@ class Enemy(Entity):
             name="ENEMY"
         )
         self.state = "idle"
+        self.aggro_range = 5
 
         self.hp = 20
+
         self.attack = 5
         self.attack_speed = 2000
-        self.init_attack_delay = 500    #delay before enemy can attack after switching to attack state for dodging purposes
+        self.init_attack_delay = 1000    #delay before enemy can attack after switching to attack state for dodging purposes
+        self.last_attack_time = 0
 
         self.move_speed = 1000
         self.last_move_time = 0
-        self.last_attack_time = 0
-
-        self.aggro_range = 5
 
         self.is_hit = False
+        self.last_hit_time = 0
         self.hit_cooldown = 100
 
     def attempt_move(self, dx, dy, room):
@@ -214,6 +221,8 @@ class Enemy(Entity):
         if self.state == "attack":
             if current_time - self.last_attack_time >= self.attack_speed and current_time - self.last_move_time >= self.init_attack_delay:
                 player.hp -= self.attack
+                player.last_hit_time = current_time
+                player.is_hit = True
                 print(f"Enemy attacks! Player HP: {player.hp}")
                 self.last_attack_time = current_time
         elif self.state == "chase":
@@ -236,8 +245,9 @@ class Enemy(Entity):
         # ------------------------------------------
         # Additional logic for hit cooldowns
         # ------------------------------------------
-        if current_time - self.is_hit > self.hit_cooldown:
+        if current_time - self.last_hit_time >= self.hit_cooldown:
             self.is_hit = False
+            self.last_hit_time = current_time
 
 
 class Chest(Entity):
