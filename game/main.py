@@ -3,9 +3,9 @@ import pygame
 #User files
 from engine.entity_system import Enemy, Player
 from engine.game_state_system import GameStateSystem
-from utils.sprite_sheet_selection import get_img_frame_surface
-from settings import  DIRECTION_VECTORS, ROOM_TILE_DICT, SCREEN_WIDTH, SCREEN_HEIGHT, TILE_SIZE, FPS, ROOM_WIDTH, ROOM_HEIGHT
-from utils.load_and_scale import load_and_scale, load_img
+from utils.sprite_sheet_selection import SpriteSheet
+from settings import  DIRECTION_VECTORS, FACE_COLS, ROOM_TILE_DICT, SCREEN_WIDTH, SCREEN_HEIGHT, TILE_SIZE, FPS, ROOM_WIDTH, ROOM_HEIGHT
+from utils.load_and_scale import get_img_hitbox_mask, load_and_scale, load_img
 from engine.map_generator import generate_dungeon_room
 
 
@@ -23,10 +23,7 @@ wall_img = load_and_scale("game/assets/tiles/Brickwall5_Texture.png", namehint="
 #Load enemy assets
 bat_grey_img = load_and_scale('game/assets/DO Monsters/Monsters/BatGrey.PNG', namehint='bat_grey')
 bat_grey_img.set_colorkey((255, 0, 255, 255))
-bat_grey_img_hit = bat_grey_img.copy()
-bat_mask = pygame.mask.from_surface(bat_grey_img_hit)
-bat_grey_img_hit.fill((255, 255, 255), special_flags=pygame.BLEND_RGB_MAX)  # Make the hit version of the sprite white to indicate being hit, can be changed to red or something else later for better feedback.
-bat_grey_img_hit = bat_mask.to_surface(bat_grey_img_hit, unsetcolor=(0, 0, 0, 0), setcolor=(255, 255, 255, 255))
+bat_grey_img_hit = get_img_hitbox_mask(bat_grey_img)
 
 # #Load loot assets
 # chest_1_img = load_and_scale('game/assets/DO Terrain/Terrain/L2_Chest01.PNG', namehint='chest_1')
@@ -43,26 +40,17 @@ bat_grey_img_hit = bat_mask.to_surface(bat_grey_img_hit, unsetcolor=(0, 0, 0, 0)
 # Load player sprite asset
 player_img = load_img("game/assets/players/Males/M_06.png", "player")
 
-
-# TODO: Create a function that can take in any sprite sheet and frame dimensions to return the correct frame as a surface. Currently hardcoded for player and door sprite sheets.
-# Possibly use a class to represent sprite sheets and their frames for better organization and reusability.
 # Get Player frame from player sprite sheet
 # 64px by 51px with 4 by 3 frames
+player_matrix_size = (16, 17) #Size of each frame in the sprite sheet
 player_frame_width = 16
 player_frame_height = 17
-player_frame = pygame.Rect(
-    0 * player_frame_width,     #0, 0 is top-left frame
-    0 * player_frame_height, 
-    player_frame_width, 
-    player_frame_height
-)     
+player_col = FACE_COLS["down"]   #Start facing down
 
-#Resize the character to be a tile size
-player_surface = get_img_frame_surface(player_img, player_frame)
-player_surface_hit = player_surface.copy()
-player_mask = pygame.mask.from_surface(player_surface_hit)
-player_surface_hit.fill((255,255,255))
-player_surface_hit = player_mask.to_surface(player_surface_hit, unsetcolor=(0,0,0,0), setcolor=(255, 255, 255, 255))
+player_sheet = SpriteSheet(player_img, player_matrix_size, player_frame_width, player_frame_height)
+player_surface = player_sheet.get_sprite_sheet_frame(0, player_col)
+
+player_surface_hit = get_img_hitbox_mask(player_surface)
 
 #Load door sprite asset 
 door_img = load_img('game/assets/doors.png', 'doors')
@@ -70,17 +58,12 @@ door_img.set_colorkey((255, 255, 255, 0))
 
 # Get door frame from door sprite sheet
 # 512px by 512px with 8 by 8 frames
-door_frame_width = 64
-door_frame_height = 64
-door_frame = pygame.Rect(
-    0 * door_frame_width, 
-    4 * door_frame_height, 
-    door_frame_width, 
-    door_frame_height
-)
+door_matrix_size = (64, 64) #Size of each frame in the sprite sheet
+door_frame_width = 32
+door_frame_height = 48
 
-#Resize the door to be a tile size
-door_surface = get_img_frame_surface(door_img, door_frame)
+door_sheet = SpriteSheet(door_img, door_matrix_size, door_frame_width, door_frame_height)
+door_surface = door_sheet.get_sprite_sheet_frame(4, 0, offset=(17,0))   #Move the frame to the right by 17 pixels to get past the white space on the left of the sprite sheet
 
 pause_overlay = pygame.Surface((ROOM_WIDTH * TILE_SIZE, ROOM_HEIGHT * TILE_SIZE))
 pause_overlay.set_alpha(120)  # Set transparency level (0-255)
@@ -109,18 +92,6 @@ player = Player(center_x, center_y, player_surface)
 room.entities.append(player)
 
 def draw_room(screen, room):
-    # '''Draws the room's tiles and entities'''
-    # for y in range(ROOM_HEIGHT):
-    #     for x in range(ROOM_WIDTH):
-    #         tile = room.room_map[y][x]
-    #         if tile == ROOM_TILE_DICT['FLOOR']:
-    #             screen.blit(floor_img, (x * TILE_SIZE, y * TILE_SIZE))
-    #         elif tile == ROOM_TILE_DICT['WALL']:
-    #             screen.blit(wall_img, (x * TILE_SIZE, y * TILE_SIZE))
-    #         elif tile == ROOM_TILE_DICT['DOOR']:
-    #             screen.blit(door_surface, (x * TILE_SIZE, y * TILE_SIZE))
-
-
     # fill the screen to wipe away anything from last frame
     screen.fill("black")
 
@@ -153,28 +124,6 @@ def draw_room(screen, room):
             entity.render(screen, bat_grey_img_hit if entity.is_hit else bat_grey_img)
         else:
             entity.render(screen)
-
-
-    #VISUAL DEBUG ONLY
-    cx, cy = room.center()
-
-    if room.type == "start":
-        color = (0, 255, 0)
-    elif room.type == "boss":
-        color = (255, 0, 0)
-    elif room.type == "loot":
-        color = (255, 255, 0)
-    elif room.type == "healing":
-        color = (255, 0, 255)
-    else:
-        color = (100, 100, 255)
-
-    pygame.draw.circle(
-        screen,
-        color,
-        (cx * TILE_SIZE, cy * TILE_SIZE),
-        5
-    )
 
     #Draw Player health bar above their head
     player_rect = player.sprite.get_rect(topleft=(player.x * TILE_SIZE, player.y * TILE_SIZE))
@@ -216,6 +165,7 @@ while game_state_system.state != "quit":
 
             if (dx, dy) != (0, 0):
                 room, world_map = player.attempt_move(dx, dy, room, world_map)
+                player_surface = player_sheet.get_sprite_sheet_frame(row=player.animation_frame, col=FACE_COLS[player.facing])
 
                 player.last_move_time = current_time
 
@@ -269,11 +219,9 @@ while game_state_system.state != "quit":
         #limits FPS to 60
         dt = clock.tick(FPS) / 1000
 
-
     #Draw Section we always want this on to keep the screen updated with the current game state, even if paused.
     #We want to keep the screen with existing content while paused instead of filling it with black, so we can render a pause overlay on top of it.
     draw_room(screen, room)
-
 
     # If the game is paused, we still want to listen for events (like unpausing or quitting), but we won't update the game state or render the game world. 
     # Instead, we can render a pause overlay or menu.

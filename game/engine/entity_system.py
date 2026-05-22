@@ -70,13 +70,20 @@ class Player(Entity):
 
         self.max_hp = 100
         self.hp = 100
+
         self.attack = 10
         self.attack_speed = 500
+        self.last_attack_time = 0
+
         self.move_delay = 200
         self.last_move_time = 0
-        self.last_attack_time = 0
         self.transition_cooldown = 0
+
         self.facing = "down"
+        self.animation_frame = 0
+        self.animation_speed = 200
+        self.last_animation_time = 0
+
         self.is_hit = False
         self.last_hit_time = 0
         self.hit_cooldown = 100
@@ -123,9 +130,15 @@ class Player(Entity):
         Checks if player is trying to move onto a door tile to transition rooms, or if the tile they are trying to move onto is blocked.'''
         target_x = self.x + dx
         target_y = self.y + dy
+        current_time = pygame.time.get_ticks()
 
         #Check which way the player went
         transition_direction = self.get_direction(dx, dy)
+
+        
+        if current_time - self.last_animation_time >= self.animation_speed:
+            self.animation_frame = (self.animation_frame + 1) % 3    #3 frames in the player animation cycle
+            self.last_animation_time = current_time
 
         #Check if target is a door and if so, handle room transition
         if room.room_map[target_y][target_x] == ROOM_TILE_DICT['DOOR']:

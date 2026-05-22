@@ -66,3 +66,11 @@ DIRECTION_VECTORS = {
     "left": (-1, 0),
     "right": (1, 0)
 }
+
+# Used for determining which column of the sprite sheet to pull from for player animations based on direction facing
+FACE_COLS = {
+    "down": 0,
+    "right": 1,
+    "up": 2,
+    "left": 3
+}
