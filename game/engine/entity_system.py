@@ -74,6 +74,7 @@ class Player(Entity):
         self.attack = 10
         self.attack_speed = 500
         self.last_attack_time = 0
+        self.attacking = False
 
         self.move_delay = 200
         self.last_move_time = 0
@@ -88,11 +89,21 @@ class Player(Entity):
         self.last_hit_time = 0
         self.hit_cooldown = 100
 
+        self.has_weapon = True      # For testing purposes, player starts with weapon. Change to False later or remove when we implement weapon pickups.
+        self.attack_angle = 0       # For testing purposes, used to rotate the sword image when attacking for a simple attack animation effect. Will be put into weapon classes
+        self.radius = 16            # For testing purposes, used for a simple circular hitbox for the player's attack. Will be moved into weapon classes. Change to a more accurate hitbox later when we implement pixel perfect collision detection.
+
     def update(self, room):
         current_time = pygame.time.get_ticks()
         if current_time - self.last_hit_time >= self.hit_cooldown:
             self.is_hit = False
             self.last_hit_time = current_time
+        if self.attacking:
+            self.attack_angle += 10
+
+            if self.attack_angle >= 90 or current_time - self.last_attack_time >= self.attack_speed:
+                self.attacking = False
+                self.attack_angle = 0
 
     def get_direction(self, dx, dy):
         '''Get the direction the player moves in'''
