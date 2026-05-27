@@ -4,8 +4,9 @@ import pygame
 #User files
 from engine.entity_system import Enemy, Player
 from engine.game_state_system import GameStateSystem
+from engine.weapon_factory import Weapon
 from utils.sprite_sheet_selection import SpriteSheet
-from settings import  DIRECTION_VECTORS, FACE_COLS, ROOM_TILE_DICT, SCREEN_WIDTH, SCREEN_HEIGHT, TILE_SIZE, FPS, ROOM_WIDTH, ROOM_HEIGHT
+from settings import  DIRECTION_VECTORS, FACE_COLS, HAND_OFFSETS, ROOM_TILE_DICT, SCREEN_WIDTH, SCREEN_HEIGHT, TILE_SIZE, FPS, ROOM_WIDTH, ROOM_HEIGHT
 from utils.load_and_scale import get_img_hitbox_mask, load_and_scale, load_img
 from engine.map_generator import generate_dungeon_room
 
@@ -97,6 +98,7 @@ world_map[room.room_pos] = {
 center_x, center_y = room.center()
 player = Player(center_x, center_y, player_surface)
 room.entities.append(player)
+player.weapon = room.items[0]    #Give player a starting weapon made in the room for testing, we will update this to make a 3 weapon pick system in starting room.
 
 def draw_room(screen, room):
     # fill the screen to wipe away anything from last frame
@@ -146,17 +148,7 @@ def draw_room(screen, room):
     # -------------
     # Draw player's weapons on them when they have them
     # -------------
-    player_rect_topright = player.sprite.get_rect(topright=(player.x * TILE_SIZE, player.y * TILE_SIZE))    # Right side anchor for drawing weapons so they appear on the correct side of the player sprite depending on which way they're facing
-    player_rect_topleft = player.sprite.get_rect(topleft=(player.x * TILE_SIZE, player.y * TILE_SIZE))
-    player_rect_bottomright = player.sprite.get_rect(bottomright=(player.x * TILE_SIZE, player.y * TILE_SIZE))
-    player_rect_bottomleft = player.sprite.get_rect(bottomleft=(player.x * TILE_SIZE, player.y * TILE_SIZE))
-    sword_1_img_flipped_y = pygame.transform.flip(sword_1_img, True, True)
-    sword_1_img_flipped_y.set_colorkey((255, 0, 255, 255))
-    # sword_1_img_flipped_x = pygame.transform.flip(sword_1_img, True, False)
-    # sword_1_img_flipped_x.set_colorkey((255, 0, 255, 255))
-    player_rect_left = player.sprite.get_rect(topright=(player.x * TILE_SIZE + 18, player.y * TILE_SIZE + 6))
-
-    if player.has_weapon:           #For testing, we will create weapon classes for better clarity
+    if player.weapon != None:           #For testing, we will create weapon classes for better clarity
         # screen.blit(sword_1_img, (player_rect_topright.x + 12, player_rect_topright.y - 4))   #Draw item +12x and -4y for sprite hand placement
         # screen.blit(sword_1_img_flipped_y, (player_rect_topleft.x, player_rect_topleft.y + 26))
         # screen.blit(sword_1_img, (player_rect_bottomright.x + 26, player_rect_bottomright.y))
@@ -164,7 +156,7 @@ def draw_room(screen, room):
         handle_x,handle_y = 25, 26       #Pixel Position of handle in the sword image
         handle_offset_x = handle_x - sword_1_img.get_width() / 2
         handle_offset_y = handle_y - sword_1_img.get_height() / 2
-        rad = math.radians(-player.attack_angle)
+        rad = math.radians(-player.weapon.attack_angle)
         rot_x = (
             handle_offset_x * math.cos(rad)
             - handle_offset_y * math.sin(rad)
@@ -173,10 +165,10 @@ def draw_room(screen, room):
             handle_offset_x * math.sin(rad)
             + handle_offset_y * math.cos(rad)
         )
-        hand_x = player.x * TILE_SIZE + 8
-        hand_y = player.y * TILE_SIZE + 24
+        hand_x = player.x * TILE_SIZE + HAND_OFFSETS["down"][0]
+        hand_y = player.y * TILE_SIZE + HAND_OFFSETS["down"][1]
 
-        sword_1_img_attack = pygame.transform.rotate(sword_1_img, player.attack_angle)   # Rotate the sword image for an attack animation effect
+        sword_1_img_attack = pygame.transform.rotate(sword_1_img, player.weapon.attack_angle)   # Rotate the sword image for an attack animation effect
         sword_1_img_attack.set_colorkey((255, 0, 255, 255))
         sword_1_img_attack_rect = sword_1_img_attack.get_rect(center=(hand_x - rot_x, hand_y - rot_y))   # Position the attack animation on the correct side of the player based on their facing direction
 
@@ -242,18 +234,16 @@ while game_state_system.state != "quit":
             facing_target_y = player.y + facing_dy
 
             target_entity = room.get_entity_at(facing_target_x, facing_target_y)
-            if current_time - player.last_attack_time >= player.attack_speed:
-                player.attacking = True
-                player.last_attack_time = current_time
-                if isinstance(target_entity, Enemy):
-                    target_entity.hp -= player.attack
-                    target_entity.last_hit_time = current_time
-                    target_entity.is_hit = True
-                    print(f'Attacked enemy! Enemy HP: {target_entity.hp}')
+            player.weapon.attack()
+            if isinstance(target_entity, Enemy):
+                target_entity.hp -= player.weapon.attack()
+                target_entity.last_hit_time = current_time
+                target_entity.is_hit = True
+                print(f'Attacked enemy! Enemy HP: {target_entity.hp}')
 
-                    if target_entity.hp <= 0:
-                        print('Enemy defeated!')
-                        room.remove_entity(target_entity)
+                if target_entity.hp <= 0:
+                    print('Enemy defeated!')
+                    room.remove_entity(target_entity)
 
         # -------------
         # Update entities in the room (enemies, chests, healing fountains, etc.)
@@ -263,6 +253,9 @@ while game_state_system.state != "quit":
                 entity.update(room)
             if isinstance(entity, Enemy):
                 entity.update(player, room)
+        for item in room.items:
+            if isinstance(item, Weapon):
+                item.update()
 
         #limits FPS to 60
         dt = clock.tick(FPS) / 1000

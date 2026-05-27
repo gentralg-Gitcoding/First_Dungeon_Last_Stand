@@ -9,6 +9,7 @@ import pygame
 from ai.gan_generator import Generator, generate_room
 from ai.diffusion_generator import SimpleUNet, generate_diffusion_dungeon_room
 from engine.entity_system import Chest, Enemy, Entity, HealingFountain
+from engine.weapon_factory import create_weapon
 from utils.load_and_scale import load_and_scale
 from settings import ROOM_HEIGHT, ROOM_WIDTH, MAX_ROOMS, ROOM_TILE_DICT, ROOM_TYPES, SCREEN_HEIGHT, SCREEN_WIDTH
 from utils.save_load_data import load_json_dataset
@@ -104,6 +105,8 @@ class Room:
 
         self.entities = list[Entity]()
         self.room_pos = (0, 0)    # Will be updated when player enters the room
+
+        self.items = []
 
     def center(self):
         return (self.x + self.w // 2, self.y + self.h // 2)
@@ -207,9 +210,6 @@ class Room:
         else:
             room = world_map[(x,y)]['room']
 
-        # reposition player depending on door used
-        # room = player.set_player_position(transition_direction, room)
-
         return room, world_map
 
 def assign_room_type(room):
@@ -233,35 +233,11 @@ def assign_room_type(room):
             room.type = "enemy"
 
 
-# def extract_room_matrix(room):
-#     '''
-#     Get Numerical representation of room tiles as a matrix, used mainly for GANs learning
-#     '''
-#     matrix = []
-#     print(f"Extracting room matrix with values from ROOM_TILE_DICT: {ROOM_TILE_DICT}")
-
-#     for y in range(room.y, room.h):
-#         row = []
-#         for x in range(room.x, room.w):
-#             tile = room.room_map[y][x]
-#             row.append(ROOM_TILE_DICT.get(tile, 0))
-#         matrix.append(row)
-
-#     return matrix
-
-
-# def apply_matrix_to_room_tiles(room, matrix):
-#     '''
-#     Convert numerical matrices into room tile characters from the MATRIX_TO_ROOM_TILE dict in settings
-#     '''
-#     # print(f"Applying matrix to room tiles using MATRIX_TO_ROOM_TILE: {MATRIX_TO_ROOM_TILE}")
-
-#     for y in range(room.h):
-#         for x in range(room.w):
-#             value = matrix[y][x]
-#             room.room_map[y][x] = MATRIX_TO_ROOM_TILE.get(value, 'WALL')
-
-#     return room
+def create_items(room):
+    if room.type == "start":
+        return create_weapon("rusty_sword")
+    else:
+        return create_weapon("rusty_sword")
 
 
 def create_structure_mask(room_matrix):
@@ -542,7 +518,6 @@ def generate_dungeon_room(width = ROOM_WIDTH, height = ROOM_HEIGHT):
         #Copy the dataset, DO NOT MODIFY THE DATA
         dataset_copy = random.choice(copy.deepcopy(DATASET))
         room.room_map, room.type = dict.values(dataset_copy)
-        # room = apply_matrix_to_room_tiles(room, room.room_map)
         print(f'\nSynth Room: {list(dataset_copy)[0]}')
         print(f'Room type: {room.type}')
         return room
@@ -552,9 +527,6 @@ def generate_dungeon_room(width = ROOM_WIDTH, height = ROOM_HEIGHT):
 
     #Skip GAN for start and boss rooms
     if room.type not in ["start", "boss"]:
-        # Get room matrix of the map
-        # room_matrix = extract_room_matrix(room)
-
         # Create structure mask
         mask = create_structure_mask(room.room_map)
 
@@ -578,12 +550,8 @@ def generate_dungeon_room(width = ROOM_WIDTH, height = ROOM_HEIGHT):
                 # Connectivity Check to make sure all doors have room for movement
                 room.room_map = enforce_reachable_door(room)
 
-                # Draw final matrix transform into room tile characters
-                # final_room = apply_matrix_to_room_tiles(room, final_matrix)
-
                 return room
             else:
-                # final_room = apply_matrix_to_room_tiles(room, gan_matrix)
                 return room
 
         elif model_selection == "diffusion":
@@ -606,33 +574,21 @@ def generate_dungeon_room(width = ROOM_WIDTH, height = ROOM_HEIGHT):
             print(f"Tensor to Tilemaps Matrix Counts: {dict(zip(unique, counts))}")
 
             if output_type == "controlled":
-
-                # # enforce structure (walls + doors)
-                # for y in range(len(room.room_map)):
-                #     for x in range(len(room.room_map[0])):
-                #         if mask[y][x] == 1:     # Only modify non-locked tiles
-                #             diff_matrix[y][x] = room.room_map[y][x]
-
-
                 # Post process diffusion output with same constraints as GAN to control room type and ensure playability
                 diff_enforced_matrix = enforce_room_type_bias(diff_matrix, room.type)
                 room.room_map, room.entities = apply_entities(room, diff_enforced_matrix, mask)
-                # room.room_map = clean_generated_doors(diff_matrix, room.room_map)
                 room.room_map, room.entities = remove_trapped_enemies(room)
                 room.room_map, room.entities = enforce_entity_limits(room, room.type)
                 room.room_map = enforce_reachable_door(room)
 
-                # Draw final matrix transform into room tile characters
-                # final_room = apply_matrix_to_room_tiles(room, diff_matrix)
-
                 return room
             
             else:
-                # final_room = apply_matrix_to_room_tiles(room, diff_matrix)
                 return room
 
-    else:
-        #Return original room (start or boss)
-        # final_room = apply_matrix_to_room_tiles(room, room.room_map)
+    elif room.type == "start":
+        room.items.append(create_items(room))
 
+        return room
+    else:
         return room

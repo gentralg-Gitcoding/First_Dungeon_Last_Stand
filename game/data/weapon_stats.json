@@ -1,0 +1,10 @@
+{
+    "rusty_sword":{
+        "category": "sword",
+        "name":"Rusty Sword",
+        "damage": 10,
+        "attack_speed": 1000,
+        "range": 10,
+        "max_angle": 90
+    }
+}

@@ -74,3 +74,7 @@ FACE_COLS = {
     "up": 2,
     "left": 3
 }
+
+HAND_OFFSETS = {
+    "down": (8, 24),
+}

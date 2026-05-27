@@ -11,7 +11,10 @@
 *.sln.docstates
 *.env
 game/assets
-game/data
+game/data/models
+game/data/diffusion_tensors.npz
+game/data/synthetic_rooms_dataset.json
+game/data/synthetic_rooms_tensors.npz
 
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
@@ -48,7 +51,7 @@ bld/
 #wwwroot/
 
 # Visual Studio 2017 auto generated files
-Generated\ Files/
+Generated/ Files/
 
 # MSTest test Results
 [Tt]est[Rr]esult*/

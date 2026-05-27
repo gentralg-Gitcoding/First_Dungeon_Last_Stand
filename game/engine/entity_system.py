@@ -1,5 +1,6 @@
 import pygame
 
+from engine.weapon_factory import Weapon
 from settings import ROOM_HEIGHT, ROOM_TILE_DICT, ROOM_WIDTH, TILE_SIZE
 
 class Entity:
@@ -71,10 +72,11 @@ class Player(Entity):
         self.max_hp = 100
         self.hp = 100
 
-        self.attack = 10
+        self.damage = 5
         self.attack_speed = 500
         self.last_attack_time = 0
         self.attacking = False
+        self.weapon = Weapon
 
         self.move_delay = 200
         self.last_move_time = 0
@@ -95,15 +97,13 @@ class Player(Entity):
 
     def update(self, room):
         current_time = pygame.time.get_ticks()
+        # -----------------------
+        # Defense logic for player 
+        # -----------------------
         if current_time - self.last_hit_time >= self.hit_cooldown:
             self.is_hit = False
             self.last_hit_time = current_time
-        if self.attacking:
-            self.attack_angle += 10
 
-            if self.attack_angle >= 90 or current_time - self.last_attack_time >= self.attack_speed:
-                self.attacking = False
-                self.attack_angle = 0
 
     def get_direction(self, dx, dy):
         '''Get the direction the player moves in'''
@@ -167,24 +167,28 @@ class Player(Entity):
         if(transition_direction == 'right'):
             #Player exits right
             self.x, self.y = 1, ROOM_HEIGHT // 2
+            room.items.append(self.weapon)
             room.entities.append(self)
             return room 
 
         elif(transition_direction == 'top'):
             #Player exits top
             self.x, self.y = ROOM_WIDTH // 2, ROOM_HEIGHT - 2
+            room.items.append(self.weapon)
             room.entities.append(self)
             return room
 
         elif(transition_direction == 'left'):
             #Player exits left
             self.x, self.y = ROOM_WIDTH - 2, ROOM_HEIGHT // 2
+            room.items.append(self.weapon)
             room.entities.append(self)
             return room
 
         elif(transition_direction == 'bottom'):
             #Player exits bottom
             self.x, self.y = ROOM_WIDTH // 2, 1
+            room.items.append(self.weapon)
             room.entities.append(self)
             return room
 
@@ -204,7 +208,7 @@ class Enemy(Entity):
 
         self.attack = 5
         self.attack_speed = 2000
-        self.init_attack_delay = 1000    #delay before enemy can attack after switching to attack state for dodging purposes
+        self.init_attack_delay = 2000    #delay before enemy can attack after switching to attack state for dodging purposes
         self.last_attack_time = 0
 
         self.move_speed = 1000
