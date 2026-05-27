@@ -76,5 +76,22 @@ FACE_COLS = {
 }
 
 HAND_OFFSETS = {
-    "down": (8, 24),
+    "left": (17, 24),
+    "up": (24, 24),
+    "right": (17, 24),
+    "down": (8, 24)
+}
+
+HANDLE_POSITIONS = {
+    "left": (25, 26),       #Pixel Position of handle in the sword image swinging left
+    "up": (7, 26),       #Pixel Position of handle in the sword image swinging upwards to attach to hand
+    "right": (7, 7),       #Pixel Position of handle in the sword image swinging right to attach to hand
+    "down": (26, 7)       #Pixel Position of handle in the sword image swinging downwards to attach to hand
+}
+
+WEAPON_FLIPPED = {
+    "left": (False, False),
+    "up": (True, False),
+    "right": (True, True),
+    "down": (False, True)
 }

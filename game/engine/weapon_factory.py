@@ -29,10 +29,8 @@ class Weapon():
 
         if current_time - self.last_attack_time >= self.attack_speed:
             self.attacking = True
+            self.last_attack_time = current_time
             return self.damage
-        else:
-            return 0
-
 
 class MeleeWeapon(Weapon):
     def __init__(self, data):

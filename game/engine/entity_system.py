@@ -76,7 +76,7 @@ class Player(Entity):
         self.attack_speed = 500
         self.last_attack_time = 0
         self.attacking = False
-        self.weapon = Weapon
+        self.weapon = Weapon        # For testing we are giving player a weapon, we will implement a 3 weapon starter choice in start room
 
         self.move_delay = 200
         self.last_move_time = 0
@@ -91,14 +91,10 @@ class Player(Entity):
         self.last_hit_time = 0
         self.hit_cooldown = 100
 
-        self.has_weapon = True      # For testing purposes, player starts with weapon. Change to False later or remove when we implement weapon pickups.
-        self.attack_angle = 0       # For testing purposes, used to rotate the sword image when attacking for a simple attack animation effect. Will be put into weapon classes
-        self.radius = 16            # For testing purposes, used for a simple circular hitbox for the player's attack. Will be moved into weapon classes. Change to a more accurate hitbox later when we implement pixel perfect collision detection.
-
     def update(self, room):
         current_time = pygame.time.get_ticks()
         # -----------------------
-        # Defense logic for player 
+        # Hit frame logic for player 
         # -----------------------
         if current_time - self.last_hit_time >= self.hit_cooldown:
             self.is_hit = False
@@ -228,6 +224,13 @@ class Enemy(Entity):
             room.update_entity_position(self, self.x + dx, self.y + dy)
             self.move(dx, dy)
 
+    def defend(self, weapon_damage):
+        current_time = pygame.time.get_ticks()
+
+        self.hp -= weapon_damage
+        self.last_hit_time = current_time
+        self.is_hit = True
+
     def update(self, player, room):
         distance_to_player = abs(self.x - player.x) + abs(self.y - player.y)
         current_time = pygame.time.get_ticks()
@@ -276,6 +279,10 @@ class Enemy(Entity):
         if current_time - self.last_hit_time >= self.hit_cooldown:
             self.is_hit = False
             self.last_hit_time = current_time
+
+        if self.hp <= 0:
+            print('Enemy defeated!')
+            room.remove_entity(self)
 
 
 class Chest(Entity):

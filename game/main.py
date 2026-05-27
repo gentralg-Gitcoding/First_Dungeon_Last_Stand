@@ -6,7 +6,7 @@ from engine.entity_system import Enemy, Player
 from engine.game_state_system import GameStateSystem
 from engine.weapon_factory import Weapon
 from utils.sprite_sheet_selection import SpriteSheet
-from settings import  DIRECTION_VECTORS, FACE_COLS, HAND_OFFSETS, ROOM_TILE_DICT, SCREEN_WIDTH, SCREEN_HEIGHT, TILE_SIZE, FPS, ROOM_WIDTH, ROOM_HEIGHT
+from settings import  DIRECTION_VECTORS, FACE_COLS, HAND_OFFSETS, HANDLE_POSITIONS, ROOM_TILE_DICT, SCREEN_WIDTH, SCREEN_HEIGHT, TILE_SIZE, FPS, ROOM_WIDTH, ROOM_HEIGHT, WEAPON_FLIPPED
 from utils.load_and_scale import get_img_hitbox_mask, load_and_scale, load_img
 from engine.map_generator import generate_dungeon_room
 
@@ -145,17 +145,15 @@ def draw_room(screen, room):
 
     pygame.draw.rect(screen, 'red', (player_rect.x, player_rect.y - 8, current_width, 5))
 
-    # -------------
+    # -------------------
     # Draw player's weapons on them when they have them
-    # -------------
+    # -------------------
     if player.weapon != None:           #For testing, we will create weapon classes for better clarity
-        # screen.blit(sword_1_img, (player_rect_topright.x + 12, player_rect_topright.y - 4))   #Draw item +12x and -4y for sprite hand placement
-        # screen.blit(sword_1_img_flipped_y, (player_rect_topleft.x, player_rect_topleft.y + 26))
-        # screen.blit(sword_1_img, (player_rect_bottomright.x + 26, player_rect_bottomright.y))
-        # screen.blit(sword_1_img_flipped_y, (player_rect_bottomleft.x + 26, player_rect_bottomleft.y + 38))
-        handle_x,handle_y = 25, 26       #Pixel Position of handle in the sword image
-        handle_offset_x = handle_x - sword_1_img.get_width() / 2
-        handle_offset_y = handle_y - sword_1_img.get_height() / 2
+        sword_1_img_flipped = pygame.transform.flip(sword_1_img, WEAPON_FLIPPED[player.facing][0], WEAPON_FLIPPED[player.facing][1])
+
+        handle_x, handle_y = HANDLE_POSITIONS[player.facing]
+        handle_offset_x = handle_x - sword_1_img_flipped.get_width() / 2
+        handle_offset_y = handle_y - sword_1_img_flipped.get_height() / 2
         rad = math.radians(-player.weapon.attack_angle)
         rot_x = (
             handle_offset_x * math.cos(rad)
@@ -165,10 +163,10 @@ def draw_room(screen, room):
             handle_offset_x * math.sin(rad)
             + handle_offset_y * math.cos(rad)
         )
-        hand_x = player.x * TILE_SIZE + HAND_OFFSETS["down"][0]
-        hand_y = player.y * TILE_SIZE + HAND_OFFSETS["down"][1]
+        hand_x = player.x * TILE_SIZE + HAND_OFFSETS[player.facing][0]
+        hand_y = player.y * TILE_SIZE + HAND_OFFSETS[player.facing][1]
 
-        sword_1_img_attack = pygame.transform.rotate(sword_1_img, player.weapon.attack_angle)   # Rotate the sword image for an attack animation effect
+        sword_1_img_attack = pygame.transform.rotate(sword_1_img_flipped, player.weapon.attack_angle)   # Rotate the sword image for an attack animation effect
         sword_1_img_attack.set_colorkey((255, 0, 255, 255))
         sword_1_img_attack_rect = sword_1_img_attack.get_rect(center=(hand_x - rot_x, hand_y - rot_y))   # Position the attack animation on the correct side of the player based on their facing direction
 
@@ -234,16 +232,12 @@ while game_state_system.state != "quit":
             facing_target_y = player.y + facing_dy
 
             target_entity = room.get_entity_at(facing_target_x, facing_target_y)
-            player.weapon.attack()
+            weapon_damage = player.weapon.attack()
             if isinstance(target_entity, Enemy):
-                target_entity.hp -= player.weapon.attack()
-                target_entity.last_hit_time = current_time
-                target_entity.is_hit = True
-                print(f'Attacked enemy! Enemy HP: {target_entity.hp}')
-
-                if target_entity.hp <= 0:
-                    print('Enemy defeated!')
-                    room.remove_entity(target_entity)
+                if weapon_damage:
+                    target_entity.defend(weapon_damage)
+                    print(f'Attacked enemy! Enemy HP: {target_entity.hp}')
+            
 
         # -------------
         # Update entities in the room (enemies, chests, healing fountains, etc.)
