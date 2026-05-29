@@ -89,9 +89,13 @@ HANDLE_POSITIONS = {
     "down": (26, 7)       #Pixel Position of handle in the sword image swinging downwards to attach to hand
 }
 
-WEAPON_FLIPPED = {
+WEAPON_FLIPPED = {              # Flip tuples for weapon image transforming based on player facing
     "left": (False, False),
     "up": (True, False),
     "right": (True, True),
     "down": (False, True)
+}
+
+WEAPON_AUDIO = {
+    "sword": "sword_swing"
 }

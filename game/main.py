@@ -5,8 +5,10 @@ import pygame
 from engine.entity_system import Enemy, Player
 from engine.game_state_system import GameStateSystem
 from engine.weapon_factory import Weapon
+from audio.music_manager import MusicManager
+from audio.sound_manager import SoundManager
 from utils.sprite_sheet_selection import SpriteSheet
-from settings import  DIRECTION_VECTORS, FACE_COLS, HAND_OFFSETS, HANDLE_POSITIONS, ROOM_TILE_DICT, SCREEN_WIDTH, SCREEN_HEIGHT, TILE_SIZE, FPS, ROOM_WIDTH, ROOM_HEIGHT, WEAPON_FLIPPED
+from settings import  DIRECTION_VECTORS, FACE_COLS, HAND_OFFSETS, HANDLE_POSITIONS, ROOM_TILE_DICT, SCREEN_WIDTH, SCREEN_HEIGHT, TILE_SIZE, FPS, ROOM_WIDTH, ROOM_HEIGHT, WEAPON_AUDIO, WEAPON_FLIPPED
 from utils.load_and_scale import get_img_hitbox_mask, load_and_scale, load_img
 from engine.map_generator import generate_dungeon_room
 
@@ -99,6 +101,17 @@ center_x, center_y = room.center()
 player = Player(center_x, center_y, player_surface)
 room.entities.append(player)
 player.weapon = room.items[0]    #Give player a starting weapon made in the room for testing, we will update this to make a 3 weapon pick system in starting room.
+
+
+# -----------------------------------
+# Load audio files
+# -----------------------------------
+music_manager = MusicManager()
+music_manager.play_music("game/assets/audio/music/1-16 Traverse Town.mp3")
+
+sound_manager = SoundManager()
+sound_manager.load_sound(WEAPON_AUDIO["sword"], "game/assets/audio/weapons/swoshes/swosh-01.flac")  # This can be looped for many sounds in the future
+
 
 def draw_room(screen, room):
     # fill the screen to wipe away anything from last frame
@@ -232,7 +245,7 @@ while game_state_system.state != "quit":
             facing_target_y = player.y + facing_dy
 
             target_entity = room.get_entity_at(facing_target_x, facing_target_y)
-            weapon_damage = player.weapon.attack()
+            weapon_damage = player.weapon.attack(sound_manager)
             if isinstance(target_entity, Enemy):
                 if weapon_damage:
                     target_entity.defend(weapon_damage)

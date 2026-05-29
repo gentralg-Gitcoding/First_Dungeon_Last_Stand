@@ -1,5 +1,6 @@
 import pygame
 
+from settings import WEAPON_AUDIO
 from utils import save_load_data
 
 WEAPON_DATASET = save_load_data.load_json_dataset("game/data/weapon_stats.json")
@@ -24,11 +25,12 @@ class Weapon():
     def update():
         pass
 
-    def attack(self):
+    def attack(self, sound_manager):
         current_time = pygame.time.get_ticks()
 
         if current_time - self.last_attack_time >= self.attack_speed:
             self.attacking = True
+            sound_manager.play_sfx(WEAPON_AUDIO[self.category])
             self.last_attack_time = current_time
             return self.damage
 

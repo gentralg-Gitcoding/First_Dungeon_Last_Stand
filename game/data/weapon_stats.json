@@ -3,7 +3,7 @@
         "category": "sword",
         "name":"Rusty Sword",
         "damage": 10,
-        "attack_speed": 1000,
+        "attack_speed": 500,
         "range": 10,
         "max_angle": 120
     }
