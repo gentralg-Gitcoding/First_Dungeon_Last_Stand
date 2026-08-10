@@ -1,5 +1,5 @@
 # First_Dungeon_Last_Stand
-My first personal creative AI Gaming project. 
+My first personal creative AI Gaming project. Development will continue soon.
 
 Link to a Demo of gameplay: https://drive.google.com/file/d/1EHQ0F8CLwHMOUJB5VlsuFRNLHe1OUEvh/view?usp=drive_link
 
